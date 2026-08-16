@@ -45,15 +45,20 @@
   if (typeof OCTAVE !== 'function') {
     setStatus('FATAL: octave.js not loaded (run scripts/build-octave-wasm.sh)');
   } else {
-    var config = {
+    var octaveConfig;
+    octaveConfig = {
+      locateFile: function (path) { return '../dist/octave-wasm/' + path; },
       print: function (text) { append(text); },
       printErr: function (text) { append(text, 'err'); },
       postRun: function () {
+        // postRun fires before the OCTAVE() promise resolves, so the runtime
+        // methods are attached to the config object itself at this point.
+        Module = octaveConfig;
         Module.execute_interp();
         initOctave();
       }
     };
-    OCTAVE(config).then(function (m) {
+    OCTAVE(octaveConfig).then(function (m) {
       Module = m;
     }).catch(function (err) {
       setStatus('octave-wasm failed: ' + err.message);

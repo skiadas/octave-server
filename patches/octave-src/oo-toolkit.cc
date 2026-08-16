@@ -14,7 +14,8 @@
 #include "gtk-manager.h"
 #include "interpreter.h"
 #include "ovl.h"
-#include "unwind-protect.h"
+#include "parse.h"
+#include "unwind-prot.h"
 
 OCTAVE_NAMESPACE_BEGIN
 
@@ -22,7 +23,7 @@ class oo_gnuplot_toolkit : public octave::base_graphics_toolkit
 {
 public:
   oo_gnuplot_toolkit (octave::interpreter& interp)
-    : octave::base_graphics_toolkit ("gnuplot"), m_interpreter (interp)
+    : octave::base_graphics_toolkit ("gnuplot")
   { }
 
   ~oo_gnuplot_toolkit (void) = default;
@@ -78,9 +79,6 @@ public:
   { return Matrix (1, 2, 0.0); }
 
   void close (void) { }
-
-private:
-  octave::interpreter& m_interpreter;
 };
 
 OCTAVE_NAMESPACE_END

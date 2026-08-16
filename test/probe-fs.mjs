@@ -1,0 +1,24 @@
+import { spawn } from 'node:child_process';
+import puppeteer from 'puppeteer-core';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const server = spawn('python3', ['-m', 'http.server', '8080'], { cwd: ROOT });
+await new Promise((r) => server.once('spawn', r));
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+const page = await browser.newPage();
+await page.goto('http://127.0.0.1:8080/app/', { waitUntil: 'load', timeout: 120000 });
+await page.waitForFunction('window.__oo && window.__oo.module', { timeout: 120000 });
+await new Promise((r) => setTimeout(r, 8000));
+const fs = await page.evaluate(() => {
+  const FS = window.__oo.module.FS;
+  const out = {};
+  const d = (p) => { try { return FS.readdir(p); } catch (e) { return 'ERR:' + e.message; } };
+  out['/usr/src/octave/m'] = d('/usr/src/octave/m');
+  out['/usr/src/octave/m/plot'] = d('/usr/src/octave/m/plot');
+  out['/usr/src/octave/m/plot/draw'] = d('/usr/src/octave/m/plot/draw');
+  out['/usr/src/octave/m/image'] = d('/usr/src/octave/m/image');
+  return out;
+});
+console.log(JSON.stringify(fs, null, 2));
+await browser.close(); server.kill(); process.exit(0);

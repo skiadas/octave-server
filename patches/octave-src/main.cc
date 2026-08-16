@@ -344,6 +344,9 @@ int EMSCRIPTEN_KEEPALIVE execute_interp() {
         "/usr/src/octave/m/legacy:"
         "/usr/src/octave/m/linear-algebra:"
         "/usr/src/octave/m/plot:"
+        "/usr/src/octave/m/plot/draw:"
+        "/usr/src/octave/m/plot/util:"
+        "/usr/src/octave/m/plot/appearance:"
         "/usr/src/octave/m/image", '\'');
     Faddpath(*interpreter, octave_paths);
 

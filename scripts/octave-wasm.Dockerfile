@@ -21,4 +21,6 @@ COPY patches/octave-m/scripts/plot/util/private/__gnuplot_get_var__.m \
      /usr/src/octave-wasm/target/share/octave/7.2.0/m/plot/util/private/__gnuplot_get_var__.m
 
 WORKDIR /usr/src/octave-wasm/src
-RUN make web/octave.js
+# Force recompilation of main.cc: layer mtimes can leave octave.o "up to date"
+# against the patched sources otherwise.
+RUN rm -f octave.o oo-toolkit.o && make web/octave.js
