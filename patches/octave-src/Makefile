@@ -53,7 +53,10 @@ octave.o:
 #	em++ $(EM_CXXFLAGS) $(EM_CFLAGS) -c main.cc -o $@
 	em++ $(EM_CXXFLAGS) $(EM_CFLAGS) -enable-emscripten-cxx-exceptions -c main.cc -o $@
 
-web/octave.js: octave.o
+oo-toolkit.o:
+	em++ $(EM_CXXFLAGS) $(EM_CFLAGS) -enable-emscripten-cxx-exceptions -c oo-toolkit.cc -o $@
+
+web/octave.js: octave.o oo-toolkit.o
 	mkdir -p web
 	em++ --bind $(EM_SFLAGS) -s EXPORTED_FUNCTIONS='["_main"]' -s EXPORTED_RUNTIME_METHODS='["FS","MEMFS"]' \
 	-s DEMANGLE_SUPPORT=0 \
@@ -79,7 +82,7 @@ web/octave.js: octave.o
 	-s EXPORT_ES6=0 --post-js post.js \
 	$(EM_CFLAGS) $(EM_LDFLAGS) -o $@ $^
 
-worker/octave.js: octave.o
+worker/octave.js: octave.o oo-toolkit.o
 	mkdir -p worker
 	em++ --bind $(EM_SFLAGS) -s EXPORTED_FUNCTIONS='["_main"]' -s EXPORTED_RUNTIME_METHODS='["FS","MEMFS"]' \
 	-s DEMANGLE_SUPPORT=0 \
@@ -106,7 +109,7 @@ worker/octave.js: octave.o
 	--post-js post.js \
 	$(EM_CFLAGS) $(EM_LDFLAGS) -o $@ $^
 
-node/octave.js: octave.o
+node/octave.js: octave.o oo-toolkit.o
 	mkdir -p node
 	em++ --bind $(EM_SFLAGS) -s EXPORTED_FUNCTIONS='["_main"]' \
 	-s DEMANGLE_SUPPORT=0 \

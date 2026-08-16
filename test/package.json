@@ -1,0 +1,11 @@
+{
+  "name": "octave-web-poc-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}

@@ -31,7 +31,9 @@ The patches live in `patches/`:
 
 | File | What it does |
 |---|---|
-| `octave-src/Makefile` | adds `plot/` + `image/` to the emscripten preload/embed lists |
+| `octave-src/Makefile` | adds `plot/` + `image/` to the emscripten preload/embed lists; compiles/links `oo-toolkit.cc` |
+| `octave-src/main.cc` | adds `plot/` + `image/` to the load path; calls `oo_register_gnuplot_toolkit` at startup |
+| `octave-src/oo-toolkit.cc` | registers the `gnuplot` graphics toolkit directly (no dlopen/gnuplot-binary needed) |
 | `octave-m/.../__gnuplot_open_stream__.m` | writes the gnuplot stream to `/plot.gp` instead of `popen()` |
 | `octave-m/.../__gnuplot_version__.m` | reports `5.4.10` without executing gnuplot |
 | `octave-m/.../__gnuplot_has_terminal__.m` | reports any terminal as available |

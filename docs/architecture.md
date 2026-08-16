@@ -45,19 +45,24 @@ go and how they are flushed.
 
 ## 4. The three integration layers
 
-### Layer 1 — Octave patch (`.m` + build flags)
+### Layer 1 — Octave patch (`.m` + C++ registration + build flags)
 
 - `__gnuplot_open_stream__.m`: write commands to a file in the Emscripten
-  virtual filesystem instead of `popen()`.
-- drawnow flush: close the command file, write `plot.gp`, force
-  `set term svg size <W>x<H> dynamic enhanced`, then signal the JS layer
-  (marker file).
-- Probe stubs: `__gnuplot_version__.m` → report 5.4; `__gnuplot_has_terminal__.m`
-  → report svg/dynamic/enhanced; `__gnuplot_has_feature__.m` → report needed
-  features — all without executing a binary.
-- Build flags: embed `scripts/plot/**` (and likely `scripts/image`,
-  `scripts/statistics`) into the wasm FS and onto the load path; ensure
-  `__init_gnuplot__` registers the `gnuplot` toolkit (or register it manually).
+  virtual filesystem (`/plot.gp`) instead of `popen()`.
+- drawnow flush: the stream stays open (append mode); the JS layer reads
+  `/plot.gp` after every eval.
+- Probe stubs: `__gnuplot_version__.m` → 5.4.10; `__gnuplot_has_terminal__.m`
+  → true; `__gnuplot_get_var__.m` → `GPVAL_TERM = svg`; all without executing
+  a binary.
+- **Toolkit registration (Gate 2):** the upstream `__init_gnuplot__` `.oct`
+  cannot load in a static wasm build (no `dlopen`) and refuses to run without
+  a gnuplot binary on `PATH`. A tiny C++ module (`oo-toolkit.cc`) is compiled
+  into the wasm binary and calls `gtk_manager::register_toolkit("gnuplot")`
+  + `load_toolkit(...)` at interpreter startup, so
+  `graphics_toolkit("gnuplot")` works and `gnuplot` becomes the default
+  toolkit.
+- Build flags: `plot/` + `image/` m-file categories added to the emscripten
+  preload lists and to the load path in `main.cc`.
 
 ### Layer 2 — JS bridge
 

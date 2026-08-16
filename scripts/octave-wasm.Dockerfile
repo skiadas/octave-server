@@ -9,6 +9,8 @@
 FROM ghcr.io/rwl/octave-wasm:latest
 
 COPY patches/octave-src/Makefile /usr/src/octave-wasm/src/Makefile
+COPY patches/octave-src/main.cc /usr/src/octave-wasm/src/main.cc
+COPY patches/octave-src/oo-toolkit.cc /usr/src/octave-wasm/src/oo-toolkit.cc
 COPY patches/octave-m/scripts/plot/util/private/__gnuplot_open_stream__.m \
      /usr/src/octave-wasm/target/share/octave/7.2.0/m/plot/util/private/__gnuplot_open_stream__.m
 COPY patches/octave-m/scripts/plot/util/private/__gnuplot_version__.m \

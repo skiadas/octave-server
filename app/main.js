@@ -10,6 +10,7 @@
   var Module = null;          // octave runtime (after OCTAVE() resolves)
   var gnuplot = null;         // gnuplot-wasm render function
   var lastPlot = null;        // last /plot.gp contents we rendered
+  var lastError = null;       // last eval error message (empty on success)
   var ready = false;
 
   function append(text, cls) {
@@ -59,12 +60,10 @@
     });
   }
 
-  /* One-time Octave setup (paths, terminal, toolkit, sizing). */
+  /* One-time Octave setup (terminal, toolkit, sizing). */
   function initOctave() {
     var setup = [
       'more off;',
-      "addpath('/usr/src/octave/m/plot', '-end');",
-      "addpath('/usr/src/octave/m/image', '-end');",
       'setenv("GNUTERM", "svg");',
       'graphics_toolkit("gnuplot");',
       'set(0, "defaultfigureposition", [100 100 800 600]);',
@@ -107,9 +106,11 @@
       return;
     }
     append('>> ' + cmd + '\n');
+    lastError = '';
     var st = Module.eval_string(cmd);
     if (st !== 0) {
-      append('\n' + Module.last_error_message() + '\n', 'err');
+      lastError = Module.last_error_message();
+      append('\n' + lastError + '\n', 'err');
     }
     renderPlot();
   }
@@ -122,4 +123,16 @@
   });
 
   append('Loading Octave (wasm)…\n');
+
+  /* Test hook for scripts/verify.mjs */
+  window.__oo = {
+    get ready() { return ready; },
+    get module() { return Module; },
+    get gnuplot() { return gnuplot; },
+    get lastError() { return lastError; },
+    get status() { return statusEl.textContent; },
+    run: run,
+    plotSVGCount: function () { return plotEl.querySelectorAll('svg').length; },
+    lastPlotLength: function () { return lastPlot ? lastPlot.length : 0; }
+  };
 })();
