@@ -3,7 +3,10 @@
 Feasibility PoC for **Route G**: GNU Octave compiled to WebAssembly, with plotting
 rendered in-browser by gnuplot compiled to WebAssembly.
 
-**Status: M0 — scaffolded. Active PoC.**
+**Status: M0/M1 done — scaffolding, vendor pinning, patch set, build scripts,
+app shell, test harness. M1/M2 wasm builds in progress (Docker).**
+
+See `docs/roadmap.md` for milestones and `docs/verification.md` for gates.
 
 ## Goal
 
