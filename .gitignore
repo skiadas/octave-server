@@ -1,0 +1,22 @@
+# Node
+node_modules/
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Wasm build outputs
+*.js.map
+*.wasm
+
+# Logs
+*.log
+nohup.out
+
+# Local server / tooling
+.DS_Store
+
+# Local env overrides
+.env
+.env.local

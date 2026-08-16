@@ -1,0 +1,6 @@
+[submodule "vendor/octave-wasm"]
+	path = vendor/octave-wasm
+	url = https://github.com/rwl/octave-wasm.git
+[submodule "vendor/gnuplot-wasm"]
+	path = vendor/gnuplot-wasm
+	url = https://github.com/Eumeryx/gnuplot-wasm.git
