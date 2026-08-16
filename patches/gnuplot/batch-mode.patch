@@ -1,0 +1,14 @@
+--- src/plot.c
++++ src/plot.c
+@@ -648,7 +648,10 @@
+ 		TextShow(&textwin);
+ 		interactive = TRUE;
+ #else
+-		interactive = isatty(fileno(stdin));
++		/* oo/gnuplot-wasm: Emscripten reports fd 0 as a tty, which puts
++		 * gnuplot into interactive mode and breaks line-buffered stdin.
++		 * The browser always wants batch mode. */
++		interactive = FALSE;
+ #endif
+ 
+ RECOVER_FROM_ERROR_IN_DASH:
