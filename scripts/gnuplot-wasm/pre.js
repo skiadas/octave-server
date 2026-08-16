@@ -22,9 +22,17 @@ var pendingInput = [];
 
 Module['printErr'] = (err) => errInfo += `${err}\n`;
 
+// Feeds one byte (0-255) or null at EOF.  Input may be a string or a
+// Uint8Array (Octave's stream can contain binary palette/image data).
 Module['stdin'] = function () {
-  return pendingInput.length ? pendingInput.shift().charCodeAt(0) : null;
+  return pendingInput.length ? pendingInput.shift() : null;
 };
+
+function toBytes(input) {
+  if (input instanceof Uint8Array) return Array.from(input);
+  if (typeof input === 'string') return input.split('').map(function (c) { return c.charCodeAt(0); });
+  return [];
+}
 
 Module['onAbort'] = reject;
 
@@ -32,9 +40,10 @@ Module['onRuntimeInitialized'] = () => resolve((input, size) => {
     errInfo = '';
     size = size ? `size ${size.x},${size.y}` : '';
 
-    // Octave's accumulated script can end while `set multiplot` is still
+    // Octave's accumulated stream can end while `set multiplot` is still
     // active; gnuplot then exits without finalizing the SVG. Close it first.
-    pendingInput = ((input || '') + '\nunset multiplot;\n').split('');
+    var cleanup = '\nunset multiplot;\n';
+    pendingInput = toBytes(input).concat(cleanup.split('').map(function (c) { return c.charCodeAt(0); }));
 
     callMain(['-e', `set o "output";set t svg ${size} dynamic enhanced;`, '-']);
     var output = FS.readFile('output', { encoding: 'utf8' });

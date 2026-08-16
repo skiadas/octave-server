@@ -1,0 +1,27 @@
+import { spawn } from 'node:child_process';
+import puppeteer from 'puppeteer-core';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const server = spawn('python3', ['-m', 'http.server', '8080'], { cwd: ROOT });
+await new Promise((r) => server.once('spawn', r));
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+const page = await browser.newPage();
+await page.goto('http://127.0.0.1:8080/app/', { waitUntil: 'load', timeout: 120000 });
+await page.waitForFunction('window.__oo && window.__oo.ready === true', { timeout: 180000 });
+const out = await page.evaluate(() => {
+  const m = window.__oo.module;
+  const R = {};
+  const E = (cmd) => { const s = m.eval_string(cmd); return { s, e: m.last_error_message() }; };
+  R.plot_only = E('close all; plot(rand(5,1));');
+  R.after_plot = (() => { try { return 'size=' + m.FS.stat('/plot.gp').size; } catch (e) { return 'absent'; } })();
+  R.refresh = E('refresh;');
+  R.after_refresh = (() => { try { return 'size=' + m.FS.stat('/plot.gp').size; } catch (e) { return 'absent'; } })();
+  R.drawnow2 = E('drawnow;');
+  R.after_dn = (() => { try { return 'size=' + m.FS.stat('/plot.gp').size; } catch (e) { return 'absent'; } })();
+  R.manual = E('__gnuplot_drawnow__(gcf);');
+  R.after_manual = (() => { try { return 'size=' + m.FS.stat('/plot.gp').size; } catch (e) { return 'absent'; } })();
+  return R;
+});
+console.log(JSON.stringify(out, null, 2));
+await browser.close(); server.kill(); process.exit(0);

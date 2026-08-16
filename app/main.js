@@ -8,7 +8,7 @@
   var plotEl = document.getElementById('plotPane');
 
   var Module = null;          // octave runtime (after OCTAVE() resolves)
-  var lastPlot = null;        // last /plot.gp contents we rendered
+  var lastPlotLen = 0;        // length of last /plot.gp bytes we rendered
   var lastError = null;       // last eval error message (empty on success)
   var ready = false;
   var gnuplotWasmPromise = null;
@@ -24,7 +24,7 @@
     return gnuplotWasmPromise;
   }
 
-  function renderWithGnuplot(script) {
+  function renderWithGnuplot(script, size) {
     return getGnuplotWasm().then(function (bytes) {
       return createGnuplot(function (importObject, callback) {
         WebAssembly.instantiate(bytes, importObject)
@@ -33,7 +33,7 @@
         return {};
       });
     }).then(function (gnuplotFn) {
-      return gnuplotFn(script, { x: 800, y: 600 });
+      return gnuplotFn(script, size);
     });
   }
 
@@ -91,7 +91,6 @@
       'setenv("GNUTERM", "svg");',
       'graphics_toolkit("gnuplot");',
       'set(0, "defaultfigureposition", [100 100 800 600]);',
-      'set(0, "defaultfigurevisible", "off");',
       'page_screen_output(0);'
     ].join('\n');
     var st = Module.eval_string(setup);
@@ -109,14 +108,15 @@
     if (!Module || typeof createGnuplot !== 'function') return;
     var script;
     try {
-      script = Module.FS.readFile('/plot.gp', { encoding: 'utf8' });
+      // Raw bytes: Octave's stream can embed binary palette/image data.
+      script = Module.FS.readFile('/plot.gp');
     } catch (e) {
       return; // no plot written yet
     }
-    if (!script || script === lastPlot) return;
-    lastPlot = script;
+    if (!script || !script.length || script.length === lastPlotLen) return;
+    lastPlotLen = script.length;
     setStatus('rendering plot…');
-    renderInFlight = renderWithGnuplot(script).then(function (svg) {
+    renderInFlight = renderWithGnuplot(script, { x: 800, y: 600 }).then(function (svg) {
       plotEl.innerHTML = svg;
       setStatus('Octave ready — plot rendered');
     }).catch(function (err) {
@@ -140,6 +140,9 @@
       lastError = Module.last_error_message();
       append('\n' + lastError + '\n', 'err');
     }
+    // This is a headless interpreter: plot() marks figures dirty but doesn't
+    // draw, so flush any pending figure render ourselves.
+    Module.eval_string('drawnow;');
     renderPlot();
   }
 
@@ -160,7 +163,7 @@
     get status() { return statusEl.textContent; },
     run: run,
     plotSVGCount: function () { return plotEl.querySelectorAll('svg').length; },
-    lastPlotLength: function () { return lastPlot ? lastPlot.length : 0; },
+    lastPlotLength: function () { return lastPlotLen; },
     awaitRender: function () { return renderInFlight; }
   };
 })();

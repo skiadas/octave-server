@@ -62,9 +62,10 @@ async function main() {
   check('Gate 2: gnuplot default', tk.current[0] === 'gnuplot', JSON.stringify(tk.current));
 
   // Basic eval + plot -> does /plot.gp get written (no octave-side error)?
-  const plot = await page.evaluate(() => {
+  const plot = await page.evaluate(async () => {
     const oo = window.__oo;
     oo.run('plot(sin(0:0.1:10))');
+    await oo.awaitRender();
     return { error: oo.lastError, scriptBytes: oo.lastPlotLength(), svgCount: oo.plotSVGCount() };
   });
   check('Gate 1/3: plot() runs w/o error', !plot.error, plot.error || `script=${plot.scriptBytes}B`);

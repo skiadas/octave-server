@@ -1,0 +1,27 @@
+import { spawn } from 'node:child_process';
+import puppeteer from 'puppeteer-core';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const server = spawn('python3', ['-m', 'http.server', '8080'], { cwd: ROOT });
+await new Promise((r) => server.once('spawn', r));
+const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+const page = await browser.newPage();
+await page.goto('http://127.0.0.1:8080/app/', { waitUntil: 'load', timeout: 120000 });
+await page.waitForFunction('window.__oo && window.__oo.ready === true', { timeout: 180000 });
+const out = await page.evaluate(() => {
+  const m = window.__oo.module;
+  const R = {};
+  const E = (cmd) => { const s = m.eval_string(cmd); return { s, e: m.last_error_message() }; };
+  R.exist_drawnow = m.feval('exist', ['__gnuplot_drawnow__'], 1);
+  R.exist_openstream = m.feval('exist', ['__gnuplot_open_stream__'], 1);
+  R.fopen = E('fid = fopen("/plot.gp","w"); disp(fid); fclose(fid);');
+  R.plot = E('plot(1:10);');
+  R.toolkit = E('disp(get(gcf, "__graphics_toolkit__"));');
+  R.manual = E('hf = gcf; __gnuplot_drawnow__(hf);');
+  R.gp = (() => { try { const s = m.FS.stat('/plot.gp'); return 'size=' + s.size; } catch (e) { return 'absent'; } })();
+  R.head = (() => { try { return m.FS.readFile('/plot.gp', {encoding:'utf8'}).slice(0,120); } catch (e) { return 'ERR ' + e.message; } })();
+  return R;
+});
+console.log(JSON.stringify(out, null, 2));
+await browser.close(); server.kill(); process.exit(0);
