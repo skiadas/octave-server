@@ -78,6 +78,20 @@ web/octave.js: octave.o oo-toolkit.o
 	--preload-file $(MFILE_PATH)/legacy@/usr/src/octave/m/legacy \
 	--preload-file $(MFILE_PATH)/plot@/usr/src/octave/m/plot \
 	--preload-file $(MFILE_PATH)/image@/usr/src/octave/m/image \
+	--preload-file $(MFILE_PATH)/audio@/usr/src/octave/m/audio \
+	--preload-file $(MFILE_PATH)/deprecated@/usr/src/octave/m/deprecated \
+	--preload-file $(MFILE_PATH)/geometry@/usr/src/octave/m/geometry \
+	--preload-file $(MFILE_PATH)/gui@/usr/src/octave/m/gui \
+	--preload-file $(MFILE_PATH)/java@/usr/src/octave/m/java \
+	--preload-file $(MFILE_PATH)/ode@/usr/src/octave/m/ode \
+	--preload-file $(MFILE_PATH)/optimization@/usr/src/octave/m/optimization \
+	--preload-file $(MFILE_PATH)/prefs@/usr/src/octave/m/prefs \
+	--preload-file $(MFILE_PATH)/profiler@/usr/src/octave/m/profiler \
+	--preload-file $(MFILE_PATH)/signal@/usr/src/octave/m/signal \
+	--preload-file $(MFILE_PATH)/special-matrix@/usr/src/octave/m/special-matrix \
+	--preload-file $(MFILE_PATH)/startup@/usr/src/octave/m/startup \
+	--preload-file $(MFILE_PATH)/testfun@/usr/src/octave/m/testfun \
+	--preload-file $(MFILE_PATH)/web@/usr/src/octave/m/web \
 	-s MODULARIZE=1 -s EXPORT_NAME=OCTAVE -s ENVIRONMENT="web" \
 	-s EXPORT_ES6=0 --post-js post.js \
 	$(EM_CFLAGS) $(EM_LDFLAGS) -o $@ $^
@@ -104,6 +118,20 @@ worker/octave.js: octave.o oo-toolkit.o
 	--embed-file $(MFILE_PATH)/legacy@/usr/src/octave/m/legacy \
 	--embed-file $(MFILE_PATH)/plot@/usr/src/octave/m/plot \
 	--embed-file $(MFILE_PATH)/image@/usr/src/octave/m/image \
+	--embed-file $(MFILE_PATH)/audio@/usr/src/octave/m/audio \
+	--embed-file $(MFILE_PATH)/deprecated@/usr/src/octave/m/deprecated \
+	--embed-file $(MFILE_PATH)/geometry@/usr/src/octave/m/geometry \
+	--embed-file $(MFILE_PATH)/gui@/usr/src/octave/m/gui \
+	--embed-file $(MFILE_PATH)/java@/usr/src/octave/m/java \
+	--embed-file $(MFILE_PATH)/ode@/usr/src/octave/m/ode \
+	--embed-file $(MFILE_PATH)/optimization@/usr/src/octave/m/optimization \
+	--embed-file $(MFILE_PATH)/prefs@/usr/src/octave/m/prefs \
+	--embed-file $(MFILE_PATH)/profiler@/usr/src/octave/m/profiler \
+	--embed-file $(MFILE_PATH)/signal@/usr/src/octave/m/signal \
+	--embed-file $(MFILE_PATH)/special-matrix@/usr/src/octave/m/special-matrix \
+	--embed-file $(MFILE_PATH)/startup@/usr/src/octave/m/startup \
+	--embed-file $(MFILE_PATH)/testfun@/usr/src/octave/m/testfun \
+	--embed-file $(MFILE_PATH)/web@/usr/src/octave/m/web \
 	-s MODULARIZE=1 -s EXPORT_NAME=OCTAVE -s ENVIRONMENT="worker" \
 	-s EXPORT_ES6=1 -s SINGLE_FILE=1 \
 	--post-js post.js \
@@ -131,6 +159,20 @@ node/octave.js: octave.o oo-toolkit.o
 	--embed-file $(MFILE_PATH)/legacy@/usr/src/octave/m/legacy \
 	--embed-file $(MFILE_PATH)/plot@/usr/src/octave/m/plot \
 	--embed-file $(MFILE_PATH)/image@/usr/src/octave/m/image \
+	--embed-file $(MFILE_PATH)/audio@/usr/src/octave/m/audio \
+	--embed-file $(MFILE_PATH)/deprecated@/usr/src/octave/m/deprecated \
+	--embed-file $(MFILE_PATH)/geometry@/usr/src/octave/m/geometry \
+	--embed-file $(MFILE_PATH)/gui@/usr/src/octave/m/gui \
+	--embed-file $(MFILE_PATH)/java@/usr/src/octave/m/java \
+	--embed-file $(MFILE_PATH)/ode@/usr/src/octave/m/ode \
+	--embed-file $(MFILE_PATH)/optimization@/usr/src/octave/m/optimization \
+	--embed-file $(MFILE_PATH)/prefs@/usr/src/octave/m/prefs \
+	--embed-file $(MFILE_PATH)/profiler@/usr/src/octave/m/profiler \
+	--embed-file $(MFILE_PATH)/signal@/usr/src/octave/m/signal \
+	--embed-file $(MFILE_PATH)/special-matrix@/usr/src/octave/m/special-matrix \
+	--embed-file $(MFILE_PATH)/startup@/usr/src/octave/m/startup \
+	--embed-file $(MFILE_PATH)/testfun@/usr/src/octave/m/testfun \
+	--embed-file $(MFILE_PATH)/web@/usr/src/octave/m/web \
 	-s MODULARIZE=1 -s EXPORT_NAME=OCTAVE -s ENVIRONMENT="node" \
 	-s EXPORT_ES6=0 --post-js post.js \
 	$(EM_CFLAGS) $(EM_LDFLAGS) -o $@ $^

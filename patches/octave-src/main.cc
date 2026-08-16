@@ -347,7 +347,21 @@ int EMSCRIPTEN_KEEPALIVE execute_interp() {
         "/usr/src/octave/m/plot/draw:"
         "/usr/src/octave/m/plot/util:"
         "/usr/src/octave/m/plot/appearance:"
-        "/usr/src/octave/m/image", '\'');
+        "/usr/src/octave/m/image:"
+        "/usr/src/octave/m/audio:"
+        "/usr/src/octave/m/deprecated:"
+        "/usr/src/octave/m/geometry:"
+        "/usr/src/octave/m/gui:"
+        "/usr/src/octave/m/java:"
+        "/usr/src/octave/m/ode:"
+        "/usr/src/octave/m/optimization:"
+        "/usr/src/octave/m/prefs:"
+        "/usr/src/octave/m/profiler:"
+        "/usr/src/octave/m/signal:"
+        "/usr/src/octave/m/special-matrix:"
+        "/usr/src/octave/m/startup:"
+        "/usr/src/octave/m/testfun:"
+        "/usr/src/octave/m/web", '\'');
     Faddpath(*interpreter, octave_paths);
 
     oo_register_gnuplot_toolkit (*interpreter);
