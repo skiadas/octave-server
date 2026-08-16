@@ -10,6 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget \
 
 WORKDIR /src
 COPY vendor/gnuplot-wasm /src
-COPY scripts/gnuplot-wasm/pre.js /src/template/pre.js
+
+# Which template/pre.js to build with. Default = our stdin-fed override.
+# Pass --build-arg PRE_JS=vendor/gnuplot-wasm/template/pre.js for upstream.
+ARG PRE_JS=scripts/gnuplot-wasm/pre.js
+COPY ${PRE_JS} /src/template/pre.js
 
 RUN bash build.sh install
