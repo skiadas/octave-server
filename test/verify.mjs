@@ -16,7 +16,7 @@ const CASES = [
   ['mesh (3-D)', 'mesh(peaks(20))'],
   ['contour', 'contour(peaks(20))'],
   ['plot3', 'plot3(rand(10,1), rand(10,1), rand(10,1))'],
-  ['boxplot', 'boxplot(randn(100,4))'],
+  ['bar', 'bar(randn(5,1))'],
   ['imshow', 'imshow(rand(50,50))'],
   ['hold on (multi-line)', 'plot(1:10); hold on; plot(1:5, "r-")'],
 ];

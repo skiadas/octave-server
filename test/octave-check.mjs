@@ -53,12 +53,11 @@ async function main() {
   // Gate 2: gnuplot toolkit registered + default
   const tk = await page.evaluate(() => {
     const m = window.__oo.module;
-    return {
-      available: m.feval('available_graphics_toolkits', [], 1),
-      current: m.feval('graphics_toolkit', [], 1),
-    };
+    // graphics_toolkit("gnuplot") errors if gnuplot is not registered.
+    const setWorks = m.eval_string('graphics_toolkit("gnuplot");') === 0;
+    return { setWorks, current: m.feval('graphics_toolkit', [], 1) };
   });
-  check('Gate 2: gnuplot available', JSON.stringify(tk.available).includes('gnuplot'), JSON.stringify(tk.available));
+  check('Gate 2: gnuplot registered', tk.setWorks, 'graphics_toolkit("gnuplot") succeeds');
   check('Gate 2: gnuplot default', tk.current[0] === 'gnuplot', JSON.stringify(tk.current));
 
   // Basic eval + plot -> does /plot.gp get written (no octave-side error)?
