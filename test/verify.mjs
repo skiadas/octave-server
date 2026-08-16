@@ -58,9 +58,10 @@ async function main() {
   console.log('Octave ready. Running battery…\n');
 
   for (const [name, cmd] of CASES) {
-    const r = await page.evaluate((c) => {
+    const r = await page.evaluate(async (c) => {
       const oo = window.__oo;
       oo.run(c);
+      await oo.awaitRender();
       return {
         error: oo.lastError,
         svgCount: oo.plotSVGCount(),

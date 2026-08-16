@@ -8,10 +8,34 @@
   var plotEl = document.getElementById('plotPane');
 
   var Module = null;          // octave runtime (after OCTAVE() resolves)
-  var gnuplot = null;         // gnuplot-wasm render function
   var lastPlot = null;        // last /plot.gp contents we rendered
   var lastError = null;       // last eval error message (empty on success)
   var ready = false;
+  var gnuplotWasmPromise = null;
+  var renderInFlight = Promise.resolve();
+
+  /* gnuplot can render only once per module instance; cache the wasm bytes
+     and instantiate a fresh module for every plot. */
+  function getGnuplotWasm() {
+    if (!gnuplotWasmPromise) {
+      gnuplotWasmPromise = fetch('../dist/gnuplot-wasm/gnuplot.wasm')
+        .then(function (r) { return r.arrayBuffer(); });
+    }
+    return gnuplotWasmPromise;
+  }
+
+  function renderWithGnuplot(script) {
+    return getGnuplotWasm().then(function (bytes) {
+      return createGnuplot(function (importObject, callback) {
+        WebAssembly.instantiate(bytes, importObject)
+          .then(function (res) { callback(res.instance); })
+          .catch(function () { callback(false); });
+        return {};
+      });
+    }).then(function (gnuplotFn) {
+      return gnuplotFn(script, { x: 800, y: 600 });
+    });
+  }
 
   function append(text, cls) {
     if (cls) text = '<span class="' + cls + '">' + escapeHtml(text) + '</span>';
@@ -33,12 +57,7 @@
   if (typeof createGnuplot !== 'function') {
     setStatus('FATAL: gnuplot.js not loaded (run scripts/build-gnuplot-wasm.sh)');
   } else {
-    createGnuplot().then(function (fn) {
-      gnuplot = fn;
-      setStatus('gnuplot-wasm ready');
-    }).catch(function (err) {
-      setStatus('gnuplot-wasm failed: ' + err.message);
-    });
+    setStatus('gnuplot-wasm loaded');
   }
 
   /* ---- octave-wasm ---- */
@@ -87,7 +106,7 @@
 
   /* After every eval, pick up /plot.gp and render it with gnuplot-wasm. */
   function renderPlot() {
-    if (!Module || !gnuplot) return;
+    if (!Module || typeof createGnuplot !== 'function') return;
     var script;
     try {
       script = Module.FS.readFile('/plot.gp', { encoding: 'utf8' });
@@ -96,13 +115,17 @@
     }
     if (!script || script === lastPlot) return;
     lastPlot = script;
-    try {
-      var svg = gnuplot(script, { x: 800, y: 600 });
+    setStatus('rendering plot…');
+    renderInFlight = renderWithGnuplot(script).then(function (svg) {
       plotEl.innerHTML = svg;
-    } catch (err) {
+      setStatus('Octave ready — plot rendered');
+    }).catch(function (err) {
       plotEl.innerHTML = '<p style="color:#c33">gnuplot render error: ' +
         escapeHtml(err.message) + '</p>';
-    }
+      setStatus('render error');
+      throw err;
+    });
+    renderInFlight.catch(function () { /* surfaced above */ });
   }
 
   function run(cmd) {
@@ -133,11 +156,11 @@
   window.__oo = {
     get ready() { return ready; },
     get module() { return Module; },
-    get gnuplot() { return gnuplot; },
     get lastError() { return lastError; },
     get status() { return statusEl.textContent; },
     run: run,
     plotSVGCount: function () { return plotEl.querySelectorAll('svg').length; },
-    lastPlotLength: function () { return lastPlot ? lastPlot.length : 0; }
+    lastPlotLength: function () { return lastPlot ? lastPlot.length : 0; },
+    awaitRender: function () { return renderInFlight; }
   };
 })();
