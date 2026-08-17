@@ -14,8 +14,14 @@ against actual findings as they land.
   cost ~$0–10/mo and near-unlimited scaling (only CDN egress).
 - Run a real, unmodified-in-behavior GNU Octave interpreter (not a reimplementation).
 
-Non-goals (PoC): auth, deployment target, file persistence, interactivity,
-a polished shell. These are deliberately left open.
+Non-goals (PoC): auth, deployment target, interactivity, a polished shell.
+These are deliberately left open.
+
+**In scope (added 2026-08-17):** *user file persistence* and a *plot gallery*.
+These were folded into the PoC because they make the app usable as a
+course/scratchpad workspace — upload data, save scripts, recover them on
+reload — at zero extra server cost (files live client-side in IndexedDB). See
+§4 Layer 2 for the FS design. Auth and deploy remain out of scope.
 
 ## 2. Components
 
@@ -159,6 +165,38 @@ sym.m method  →  oo_sym_call("str(sympify('...').diff(...))")
 
 The two wasm modules never call each other; JS is the only glue.
 
+### Layer 2b — User filesystem + plot gallery (client persistence)
+
+To ride on the zero-server-cost model, user data lives entirely in the
+browser and is mirrored into Octave's Emscripten MEMFS (which is volatile,
+wiped each page load) so Octave sees uploaded files and saved scripts
+immediately (`load`/`run`/`csvread`/`imread`).
+
+- **Store (`app/fsstore.js`):** IndexedDB object store `files` keyed by full
+  path (`""` = root, `"dir/file.m"`), values `{kind:'file', bytes:Uint8Array,
+  ts}` or `{kind:'dir'}`. All methods return Promises. When IndexedDB is
+  unavailable it falls back to an in-memory `Map` with the same async API so
+  the app still works for the session (and the no-browser unit harness stays
+  green).
+- **Bridge (`app/octfs.js`):** applies every op to the store **and** live
+  MEMFS under `ooApp.userPath` (`/home/user`); `hydrate()` replays the whole
+  store into MEMFS at boot and points Octave's cwd there via `cd` + `addpath`.
+  MEMFS writes are synchronous (so Octave sees files instantly); the IndexedDB
+  persist is async and returned as the promise.
+- **Panel (`app/filepanel.js`):** a collapsible file tree rendered from the
+  store, with new-folder, upload (picker + drag/drop), download, rename,
+  delete, refresh, and click-to-preview (image via blob URL, text/`.m` as
+  source). Mutations funnel through `ooApp.octfs` so store and MEMFS stay in
+  sync; it re-renders on the `fs:change` / `fs:hydrated` events.
+- **Gallery (`app/gallery.js`):** session-scoped plot history. Each rendered
+  SVG is added from `main.js`; thumbnails support click-to-view, individual
+  SVG/PNG download (PNG via canvas rasterization), per-item remove, and a
+  clear-all. It never writes into `#plotPane` (which holds only the single
+  current SVG).
+- **Shared (`app/util.js`):** the `window.ooApp` namespace (DOM helpers,
+  escaping, pub/sub, blob-download) that the above modules and `main.js`
+  share. Plain scripts, no build step.
+
 ### Layer 3 — Build
 
 - octave-wasm: Docker stage-2 relink FROM the frozen GHCR base
@@ -194,7 +232,8 @@ Multiple figures → one SVG per figure per flush.
 
 ## 7. Known limitations (PoC-scope)
 
-- SVG-only output (no PNG/PDF export yet).
+- SVG rendering with browser-side PNG export via the plot gallery (no
+  server-side render; no PDF export yet).
 - No plot interactivity (ginput/zoom/rotation).
 - Single-threaded Octave (Emscripten build disables threads/OpenMP).
 - Two small community wasm projects are upstream; we own integration and

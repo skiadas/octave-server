@@ -1,6 +1,11 @@
-/* PoC glue: Octave (wasm) <-> gnuplot-wasm renderer. */
+/* PoC glue orchestrator: Octave (wasm) <-> gnuplot-wasm renderer, plus the
+   file system (IndexedDB <-> MEMFS, via ooApp.octfs) and plot gallery. This
+   file is the wiring layer; the individual concerns live in the modules loaded
+   before it: util, fsstore, octfs, gallery, filepanel. */
 (function () {
   'use strict';
+
+  var ooApp = window.ooApp;
 
   var outEl = document.getElementById('output');
   var cmdEl = document.getElementById('cmd');
@@ -14,8 +19,11 @@
   var lastPlotLen = 0;        // length of last /plot.gp bytes we rendered
   var lastError = null;       // last eval error message (empty on success)
   var ready = false;
+  var fsReady = false;
   var gnuplotWasmPromise = null;
   var renderInFlight = Promise.resolve();
+
+  var escapeHtml = ooApp.escapeHtml;
 
   /* gnuplot can render only once per module instance; cache the wasm bytes
      and instantiate a fresh module for every plot. */
@@ -46,6 +54,11 @@
     outEl.scrollTop = outEl.scrollHeight;
   }
 
+  /* ooApp.append lets the FS/gallery modules report into the console. Set it
+     here (append defined above). */
+  function appendResult(text, cls) { append(text, cls); }
+  ooApp.append = appendResult;
+
   /* The FreeType warning is benign in this wasm build (the gnuplot toolkit
      renders its own text; only Octave's auto label-extent probing triggers
      it) and has no warning identifier, so it cannot be targeted with
@@ -68,12 +81,6 @@
       return null;
     }
     return line;
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"]/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
-    });
   }
 
   function setStatus(msg) {
@@ -106,18 +113,23 @@
         // postRun fires before the OCTAVE() promise resolves, so the runtime
         // methods are attached to the config object itself at this point.
         Module = octaveConfig;
+        ooApp.Module = octaveConfig;
         Module.execute_interp();
         initOctave();
       }
     };
     OCTAVE(octaveConfig).then(function (m) {
       Module = m;
+      ooApp.Module = m;
     }).catch(function (err) {
       setStatus('octave-wasm failed: ' + err.message);
     });
   }
 
-  /* One-time Octave setup (terminal, toolkit, sizing). */
+  /* One-time Octave setup (terminal, toolkit, sizing), then hydrate the user
+     filesystem (IndexedDB -> MEMFS) asynchronously. ready is set synchronously
+     so callers depending on the old contract see it immediately; hydration is
+     best-effort and non-blocking. */
   function initOctave() {
     var setup = [
       'more off;',
@@ -134,9 +146,21 @@
     }
     ready = true;
     setStatus('Octave ready — try: plot(sin(0:0.1:10))');
+    // Hydrate persisted user files into MEMFS (non-blocking; synced on next
+    // octave eval via cd/addpath inside hydrate).
+    if (ooApp.octfs && typeof ooApp.octfs.hydrate === 'function') {
+      ooApp.octfs.hydrate().then(function () {
+        fsReady = true;
+      }).catch(function () {
+        fsReady = true; // degrade to memory-only if hydration failed
+      });
+    } else {
+      fsReady = true;
+    }
   }
 
-  /* After every eval, pick up /plot.gp and render it with gnuplot-wasm. */
+  /* After every eval, pick up /plot.gp and render it with gnuplot-wasm. On a
+     successful render, broadcast the SVG so the gallery can keep history. */
   function renderPlot() {
     if (!Module || typeof createGnuplot !== 'function') return;
     var script;
@@ -152,6 +176,7 @@
     renderInFlight = renderWithGnuplot(script, { x: 800, y: 600 }).then(function (svg) {
       plotEl.innerHTML = svg;
       setStatus('Octave ready — plot rendered');
+      if (ooApp.gallery) ooApp.gallery.add(svg, 'plot');
     }).catch(function (err) {
       plotEl.innerHTML = '<p style="color:#c33">gnuplot render error: ' +
         escapeHtml(err.message) + '</p>';
@@ -186,34 +211,44 @@
     }
   });
 
-  /* Run a whole script file: write the editor contents into the Emscripten
-     virtual filesystem, then evaluate the text directly.  (Octave's source()
-     would be the natural fit, but in this wasm build it swallows errors —
-     eval_string reports them just like run() does.) */
+  /* Run a whole script file: persist the editor text into the user filesystem
+     (IndexedDB + MEMFS at /home/user/<name>), then evaluate the text directly.
+     (Octave's source() would be the natural fit, but in this wasm build it
+     swallows errors — eval_string reports them just like run() does.) */
   function runFile(text) {
     if (!ready) {
       append('\nOctave not ready yet.\n');
       return;
     }
-    // Only a real string is writable to MEMFS; a DOM listener that calls us
-    // with a click Event must fall back to the editor contents.
+    // Only a real string is writable; a DOM listener that calls us with a
+    // click Event must fall back to the editor contents.
     if (typeof text !== 'string') text = editorEl.value;
     var name = (filenameEl.value || 'script.m').trim();
     if (!/^[A-Za-z0-9_.\/-]+$/.test(name)) {
       append('\nInvalid file name: ' + escapeHtml(name) + '\n', 'err');
       return;
     }
-    var path = '/' + name.replace(/^\/+/, '');
-    try {
-      Module.FS.writeFile(path, text);
-    } catch (e) {
-      append('\nCould not write ' + escapeHtml(name) + ': ' +
-        escapeHtml(e && e.message ? e.message : String(e)) + '\n', 'err');
-      return;
+    var rel = name.replace(/^\/+/, '');
+    // Persist into the user tree (MEMFS write is synchronous; store async).
+    if (ooApp.octfs && typeof ooApp.octfs.putFile === 'function') {
+      ooApp.octfs.putFile(rel, text).catch(function (e) {
+        append('\nCould not save ' + escapeHtml(name) + ': ' +
+          escapeHtml(e && e.message ? e.message : String(e)) + '\n', 'err');
+      });
+    } else {
+      // No FS module (shouldn't happen; modules load before main.js).
+      var path = '/' + rel;
+      try {
+        Module.FS.writeFile(path, text);
+      } catch (e) {
+        append('\nCould not write ' + escapeHtml(name) + ': ' +
+          escapeHtml(e && e.message ? e.message : String(e)) + '\n', 'err');
+        return;
+      }
     }
     append('>> run ' + escapeHtml(name) + '\n');
     lastError = '';
-    var st = Module.eval_string(text);
+    var st = Module.eval_string(text.toString());
     if (st !== 0) {
       lastError = Module.last_error_message();
       append('\n' + lastError + '\n', 'err');
@@ -306,6 +341,7 @@
   /* Test hook for scripts/verify.mjs */
   window.__oo = {
     get ready() { return ready; },
+    get fsReady() { return fsReady; },
     get module() { return Module; },
     get lastError() { return lastError; },
     get status() { return statusEl.textContent; },

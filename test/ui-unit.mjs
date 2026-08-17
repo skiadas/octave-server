@@ -1,12 +1,21 @@
-/* UI unit tests (fast tier, <1s): drives app/main.js's glue logic with a
-   stubbed Module/OCTAVE and a minimal fake DOM — no Chrome, no wasm, no
-   gnuplot renders. Catches UI wiring regressions (e.g. the click-Event bug)
-   without the integration battery. */
+/* UI unit tests (fast tier, <1s): drives the app's glue logic with a stubbed
+   Module/OCTAVE and a minimal fake DOM — no Chrome, no wasm, no gnuplot
+   renders. Catches UI wiring regressions (e.g. the click-Event bug) without
+   the integration battery.
+
+   Loads the app modules in their real load order (util -> fsstore -> octfs ->
+   gallery -> filepanel -> main) into one shared VM context so cross-module
+   wiring through window.ooApp is exercised the same as in the browser. */
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const APP_JS = readFileSync(new URL('../app/main.js', import.meta.url), 'utf8');
-const ELEM_IDS = ['output', 'cmd', 'status', 'plotPane', 'editor', 'filename', 'runBtn'];
+const MODULES = ['util', 'fsstore', 'octfs', 'gallery', 'filepanel', 'main'];
+const ELEM_IDS = [
+  'output', 'cmd', 'status', 'plotPane', 'editor', 'filename', 'runBtn',
+  'filesPane', 'galleryPane', 'galleryList', 'galleryEmpty', 'galleryClearBtn',
+  'previewPane', 'previewTitle', 'previewImg', 'previewText', 'previewClose',
+  'fileInput',
+];
 
 function innerTextFrom(html) {
   return String(html)
@@ -22,14 +31,20 @@ function makeElement(id) {
   let _textSet = false;
   const el = {
     id, value: '', scrollTop: 0, scrollHeight: 0,
-    style: {}, className: '', handlers: {},
+    style: {}, className: '', handlers: {}, children: [],
     addEventListener(type, fn) { this.handlers[type] = fn; },
     click() { if (this.handlers.click) this.handlers.click({ preventDefault() {}, target: this }); },
     querySelectorAll() { return []; },
+    appendChild(c) { this.children.push(c); return c; },
+    replaceChildren(...cs) { this.children = cs; },
+    removeAttribute() {},
+    querySelector() { return null; },
     get selectionStart() { return selectionStart; },
     set selectionStart(v) { selectionStart = v; },
     get selectionEnd() { return selectionEnd; },
     set selectionEnd(v) { selectionEnd = v; },
+    blur() {},
+    focus() {},
   };
   Object.defineProperty(el, 'innerHTML', {
     get() { return _html; },
@@ -51,6 +66,8 @@ const state = {
   evalStatus(code) {
     if (code.indexOf('more off') !== -1) return 0;            // initOctave setup
     if (code.indexOf('drawnow') !== -1) return 0;
+    if (code.startsWith('cd("')) return 0;                    // octfs hydrate cd
+    if (code.startsWith('addpath("')) return 0;               // octfs hydrate addpath
     if (code.indexOf('SMOKE_FAIL') !== -1) {
       state.lastErr = 'boom: SMOKE_FAIL near line 1';
       return -2;
@@ -58,7 +75,13 @@ const state = {
     return 0;
   },
   fs: {
-    writeFile(path, data) { state.writes[path] = String(data); },
+    writeFile(path, data) {
+      // octfs writes Uint8Array (binary-safe); decode back to string for
+      // the textual scripts the tests assert on.
+      state.writes[path] = typeof data === 'string'
+        ? data
+        : new TextDecoder().decode(data);
+    },
     readFile(path) {
       if (Object.prototype.hasOwnProperty.call(state.writes, path)) {
         return new TextEncoder().encode(state.writes[path]);
@@ -94,8 +117,20 @@ const context = {
   OCTAVE,
   createGnuplot: function () { return Promise.resolve(() => Promise.resolve('')); },
   fetch: () => Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) }),
+  TextEncoder,
+  TextDecoder,
+  URL,
+  Blob,
+  Map,
+  Uint8Array,
 };
-context.window.__oo = () => null; // replaced below by main.js (placeholder kept for the vm run)
+context.window.__oo = null;
+
+// Run the app modules in real order into the shared context.
+for (const name of MODULES) {
+  const src = readFileSync(new URL('../app/' + name + '.js', import.meta.url), 'utf8');
+  vm.runInNewContext(src, context, { filename: 'app/' + name + '.js' });
+}
 
 let failures = 0;
 function check(name, ok, detail) {
@@ -103,13 +138,13 @@ function check(name, ok, detail) {
   if (!ok) failures = 1;
 }
 
-vm.runInNewContext(APP_JS, context);
 const oo = windowObj.__oo;
 const output = elements.output;
 const editor = elements.editor;
 const filename = elements.filename;
 const runBtn = elements.runBtn;
 
+check('app modules load & __oo exposed', !!oo, typeof oo);
 check('app boots & is ready (initOctave ran)', oo && oo.ready === true, `ready=${oo && oo.ready}`);
 
 check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFile);
@@ -118,9 +153,9 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   const before = output.textContent.length;
   oo.runFile('printf("unit-ok\\n");');
   const out = output.textContent.slice(before);
-  check('runFile writes script.m and evaluates',
-    state.writes['/script.m'] === 'printf("unit-ok\\n");' && out.indexOf('>> run script.m') !== -1 && !oo.lastError,
-    `wrote=${JSON.stringify(state.writes['/script.m'])} lastError=${oo.lastError || '(none)'}`);
+  check('runFile writes user-FS script.m and evaluates',
+    state.writes['/home/user/script.m'] === 'printf("unit-ok\\n");' && out.indexOf('>> run script.m') !== -1 && !oo.lastError,
+    `wrote=${JSON.stringify(state.writes['/home/user/script.m'])} lastError=${oo.lastError || '(none)'}`);
 }
 
 {
@@ -128,16 +163,16 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   editor.value = 'printf("click-ok\\n");\n';
   runBtn.click();
   check('run button click writes editor contents (Event bug guard)',
-    state.writes['/script.m'] === editor.value && !oo.lastError,
-    `wrote=${JSON.stringify(state.writes['/script.m'])} lastError=${oo.lastError || '(none)'}`);
+    state.writes['/home/user/script.m'] === editor.value && !oo.lastError,
+    `wrote=${JSON.stringify(state.writes['/home/user/script.m'])} lastError=${oo.lastError || '(none)'}`);
 }
 
 {
   editor.value = '';
   oo.runFile(123); // non-string falls back to the editor text
   check('non-string runFile arg falls back to editor text',
-    Object.prototype.hasOwnProperty.call(state.writes, '/script.m') && typeof state.writes['/script.m'] === 'string',
-    `wrote=${JSON.stringify(state.writes['/script.m'])}`);
+    Object.prototype.hasOwnProperty.call(state.writes, '/home/user/script.m') && typeof state.writes['/home/user/script.m'] === 'string',
+    `wrote=${JSON.stringify(state.writes['/home/user/script.m'])}`);
 }
 
 {
@@ -147,7 +182,7 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   filename.value = 'script.m';
   const out = output.textContent.slice(before);
   check('invalid file name rejected',
-    out.indexOf('Invalid file name') !== -1 && !state.writes['/bad name!'],
+    out.indexOf('Invalid file name') !== -1 && !state.writes['/home/user/bad name!'],
     out.slice(out.indexOf('Invalid file name'), out.indexOf('\n', out.indexOf('Invalid file name') + 20) + 1).trim());
 }
 
@@ -164,6 +199,18 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
 {
   const m = windowObj.__oo.module;
   check('__oo.module is the configured runtime', m && typeof m.eval_string === 'function', typeof m && m.eval_string ? 'attached' : 'missing');
+}
+
+// FS round-trip: putFile persisted the editor scripts to the store (via the
+// module chain's octfs + fsStore), and the store lists them back.
+{
+  const ooApp = windowObj.ooApp;
+  check('ooApp + fsStore wired', ooApp && ooApp.fsStore && typeof ooApp.fsStore.list === 'function', ooApp ? 'attached' : 'missing');
+  await ooApp.fsStore.list().then(function (items) {
+    const paths = items.map(function (i) { return i.path; });
+    check('runFile scripts persisted to the store', paths.indexOf('script.m') !== -1,
+      'stored: ' + paths.join(', '));
+  });
 }
 
 console.log(failures ? '\nUI unit tests: FAILED' : '\nUI unit tests: all passed');

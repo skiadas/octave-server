@@ -52,8 +52,9 @@ PoC milestones for Route G. Each gate has a crisp pass/fail criterion.
 
 - Octave (wasm) + gnuplot (wasm) render course-typical plots in-browser.
 - All four gates pass.
-- Remaining work to production is bounded and enumerated (app shell polish,
-  persistence, auth/deployment) rather than open-ended R&D.
+- Remaining work to production is bounded and enumerated (client-side FS +
+  gallery are done in this PoC; remaining: server-side auth/persistence,
+  deployment hardening) rather than open-ended R&D.
 
 ## Notes
 

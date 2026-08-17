@@ -8,7 +8,27 @@
     body { font-family: -apple-system, system-ui, sans-serif; margin: 0; }
     header { padding: 8px 12px; background: #222; color: #fff; font-size: 14px; }
     main { display: flex; flex-direction: row; gap: 8px; padding: 8px; height: calc(100vh - 60px); }
-    #editorPane { flex: 1 1 25%; display: flex; flex-direction: column; min-width: 0; }
+
+    /* ---- files panel ---- */
+    #filesPane { flex: 0 0 240px; display: flex; flex-direction: column; min-width: 0;
+                 border: 1px solid #ccc; overflow: auto; }
+    .fs-bar { display: flex; gap: 4px; padding: 4px; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
+    .fs-bar-btn, .fs-btn { font-size: 11px; cursor: pointer; background: #eee; border: 1px solid #bbb; border-radius: 3px; padding: 2px 6px; }
+    .fs-bar-btn:hover, .fs-btn:hover { background: #ddd; }
+    .fs-body { flex: 1 1 auto; overflow: auto; padding: 4px 0; }
+    .fs-row { display: flex; align-items: center; gap: 4px; padding: 2px 6px; white-space: nowrap; }
+    .fs-row:hover { background: #f0f2f5; }
+    .fs-glyph { width: 14px; text-align: center; cursor: pointer; color: #666; }
+    .fs-name { flex: 1; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .fs-dir { font-weight: 600; }
+    .fs-actions { display: none; gap: 2px; }
+    .fs-row:hover .fs-actions { display: inline-flex; }
+    .fs-empty { color: #999; font-size: 12px; padding: 8px; }
+    .fs-drop-hint { border: 2px dashed #4a90d9; color: #4a90d9; text-align: center; }
+    #filesPane.fs-drop-hint { border-color: #4a90d9; }
+
+    /* ---- editor ---- */
+    #editorPane { flex: 1 1 22%; display: flex; flex-direction: column; min-width: 0; }
     #editorBar { display: flex; gap: 4px; padding-bottom: 4px; }
     #filename {
       flex: 1; min-width: 0; font-family: ui-monospace, Menlo, monospace;
@@ -19,9 +39,9 @@
       flex: 1 1 auto; resize: none; font-family: ui-monospace, Menlo, monospace;
       font-size: 13px; padding: 8px; border: 1px solid #888; white-space: pre; overflow: auto;
     }
-    #consolePane { flex: 1 1 40%; display: flex; flex-direction: column; min-width: 0; }
-    #plotPane { flex: 1 1 35%; border: 1px solid #ccc; overflow: auto; min-width: 0; }
-    #plotPane svg { max-width: 100%; height: auto; display: block; margin: 8px; border: 1px solid #eee; }
+
+    /* ---- console ---- */
+    #consolePane { flex: 1 1 36%; display: flex; flex-direction: column; min-width: 0; }
     #output {
       flex: 1 1 auto; overflow: auto; background: #111; color: #ddd;
       font-family: ui-monospace, Menlo, monospace; font-size: 13px;
@@ -33,12 +53,43 @@
       padding: 8px; border: 1px solid #888; border-top: 0;
     }
     #status { padding: 4px 8px; font-size: 12px; color: #666; }
+
+    /* ---- plot + gallery column ---- */
+    #plotCol { flex: 1 1 32%; display: flex; flex-direction: column; min-width: 0; gap: 6px; }
+    #plotPane { flex: 0 0 auto; border: 1px solid #ccc; overflow: auto; min-height: 120px; max-height: 55%; }
+    #plotPane svg { max-width: 100%; height: auto; display: block; margin: 8px; border: 1px solid #eee; }
+    #galleryPane { flex: 1 1 auto; border: 1px solid #ccc; overflow: auto; min-height: 80px; }
+    .galleryBar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid #ddd; font-size: 12px; font-weight: 600; }
+    .galleryBar .spacer { flex: 1; }
+    .galleryBar button { font-size: 11px; cursor: pointer; background: #eee; border: 1px solid #bbb; border-radius: 3px; padding: 2px 6px; }
+    #galleryList { padding: 4px; }
+    #galleryEmpty { color: #999; font-size: 12px; padding: 8px; }
+    .gal-item { display: inline-block; margin: 4px; border: 1px solid #ccc; vertical-align: top; max-width: 150px; }
+    .gal-item:hover { border-color: #4a90d9; }
+    .gal-thumb { width: 148px; height: 90px; overflow: hidden; cursor: pointer; background: #fff; }
+    .gal-thumb svg { max-width: 100%; height: auto; }
+    .gal-meta { font-size: 10px; color: #555; padding: 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gal-tools { padding: 2px 4px; }
+    .gal-btn { font-size: 10px; cursor: pointer; background: #f2f2f2; border: 1px solid #bbb; border-radius: 3px; padding: 1px 5px; margin-right: 3px; }
+
+    /* ---- preview overlay ---- */
+    #previewPane { display: none; position: fixed; right: 8px; top: 52px; bottom: 8px; width: 40%;
+                   background: #fff; border: 1px solid #999; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+                   z-index: 20; flex-direction: column; }
+    #previewTitle { font-size: 12px; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid #ddd; }
+    #previewClose { position: absolute; right: 4px; top: 2px; cursor: pointer; background: none; border: none; font-size: 16px; color: #666; }
+    #previewImg { display: none; max-width: 100%; max-height: calc(100% - 40px); object-fit: contain; margin: 8px; }
+    #previewText { display: none; white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace;
+                   font-size: 12px; padding: 8px; overflow: auto; flex: 1; }
+
     .err { color: #f88; }
   </style>
 </head>
 <body>
   <header>Octave Web PoC &mdash; Route G (octave-wasm + gnuplot-wasm)</header>
   <main>
+    <div id="filesPane" title="Drop files here to upload"></div>
+
     <div id="editorPane">
       <div id="editorBar">
         <input id="filename" type="text" value="script.m" autocomplete="off" spellcheck="false">
@@ -46,17 +97,44 @@
       </div>
       <textarea id="editor" spellcheck="false" placeholder="% Write a full Octave script, then press Ctrl+Enter to run it."></textarea>
     </div>
+
     <div id="consolePane">
       <pre id="output">Loading…
 </pre>
       <div id="cmdRow"><input id="cmd" type="text" placeholder="octave&gt; plot(sin(0:0.1:10))" autocomplete="off" spellcheck="false"></div>
       <div id="status"></div>
     </div>
-    <div id="plotPane"></div>
+
+    <div id="plotCol">
+      <div id="plotPane"></div>
+      <div id="galleryPane">
+        <div class="galleryBar">
+          <span>Plot history</span>
+          <span class="spacer"></span>
+          <button id="galleryClearBtn" type="button">clear</button>
+        </div>
+        <div id="galleryList"><div id="galleryEmpty">No plots yet. Run a plotting command.</div></div>
+      </div>
+    </div>
   </main>
+
+  <input id="fileInput" type="file" multiple hidden>
+
+  <div id="previewPane">
+    <div id="previewTitle">Preview</div>
+    <button id="previewClose" type="button" title="Close">×</button>
+    <img id="previewImg" alt="">
+    <pre id="previewText"></pre>
+  </div>
+
   <script src="../dist/gnuplot-wasm/gnuplot.js"></script>
   <script src="../dist/octave-wasm/octave.js"></script>
   <script src="https://cdn.jsdelivr.net/pyodide/v314.0.4/full/pyodide.js"></script>
+  <script src="util.js"></script>
+  <script src="fsstore.js"></script>
+  <script src="octfs.js"></script>
+  <script src="gallery.js"></script>
+  <script src="filepanel.js"></script>
   <script src="main.js"></script>
 </body>
 </html>
