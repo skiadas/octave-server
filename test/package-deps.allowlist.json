@@ -68,7 +68,7 @@
   "statistic": { "reason": "LOCAL: variable in vartestn" },
   "group_size": { "reason": "LOCAL: variable in vartestn" },
   "z": { "reason": "LOCAL: variable in violin" },
-  "nelder_mead_min": { "reason": "REAL-CROSS: regdatasmooth.m reaches into the optimizer helper; nelder_mead_min.m exists in the repo overlay but is NOT shipped in the current wasm data-smoothing-forge tree (only 4 files). Fix: bake it or co-bake the optimizer tree." },
+  "nelder_mead_min": { "reason": "REAL-CROSS-FIXED: regdatasmooth.m default-optimizer dep. Dockerfile now ships pure-.m nelder_mead_min into the baked data-smoothing-forge tree; verified in-browser (which resolves, default GCV path returns 101 finite pts). Entry stays until the next octave-wasm rebuild publishes the file (then reclassifies BAKED and can be dropped)." },
   "provided": { "reason": "LOCAL: variable in rgdtsmcore" },
   "float": { "reason": "REAL-CROSS: @sym/float method invoked; symbolic-sympy ships only a 6-file subset — full @sym class methods not baked. Confirm the sym() path guards these." },
   "integrate": { "reason": "REAL-CROSS: @sym/integrate method, not baked in the symbolic subset" },
