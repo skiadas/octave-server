@@ -71,6 +71,24 @@ Forge `statistics` 1.6.0 `inst/` tree (baked into the wasm FS; see
   `laplace(t^2)` → `2/s**3`; `dsolve("D2y+y=0")` → `C1*sin(x)+C2*cos(x)`;
   `double(sym("sqrt(2)"))^2` → `2.0000`.
 
+### CI auto-deploy (2026-08-17)
+
+- Repo `skiadas/octave-server` created & pushed; Pages source = **GitHub
+  Actions**.
+- `Deploy` workflow ran green end-to-end in **7m16s** on the first cold build
+  (build gnuplot-wasm + relink octave-wasm FROM the frozen GHCR base, assemble
+  `app/` + `dist/` + `.nojekyll` + redirect, `actions/deploy-pages`).
+- Site live: <https://skiadas.github.io/octave-server/> (redirects to
+  `/app/`); all assets 200 — `octave.wasm` 17 MB, `gnuplot.wasm` 0.9 MB.
+- Anonymous GHCR pull of `ghcr.io/skiadas/octave-base:7.2.0-1` verified
+  (package set public); the build pins the base by digest, so deploys never
+  depend on upstream `rwl/octave-wasm`. Every push to `main` auto-redeploys.
+- `Rebuild base image` workflow: **config-validated only, never run live** — it
+  requires the optional `GHCR_PAT` repo secret. An earlier revision failed at
+  workflow-config validation on the push that first added it (a `name:` was
+  missing and `secrets` was referenced in a step `if:`); fixed by adding the
+  name and moving the secret check into a step.
+
 > **Perf caveat:** gnuplot-wasm SVG rendering is CPU-bound and headless-Chrome
 > renders under host load are the bottleneck.  This is environmental, not a
 > regression; the eval side is fast (fraction of a second).

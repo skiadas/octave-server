@@ -27,6 +27,14 @@ a polished shell. These are deliberately left open.
 | App shell (`app/`) | ours | Console, plot panel, worker orchestration |
 | JS bridge | ours | Moves gnuplot scripts + SVG between the two wasm modules |
 
+> **Runtime network surface:** the web build is fully client-side; the *only*
+> runtime network fetch is the symbolic shim's Pyodide/SymPy bundle from the
+> JsDelivr CDN (pinned `v314.0.4/full/` — script tag in `app/index.html`,
+> `loadPyodide({ indexURL })` + `loadPackage('sympy')` in `app/main.js`).
+> Numeric, plotting, gnuplot rendering, and Forge stats all run with no
+> network once the assets are served over HTTP; symbolic degrades cleanly
+> whenever Pyodide can't load (offline / CDN blocked).
+
 ## 3. Why Octave's gnuplot toolkit is the right lever
 
 In Octave 7.x the gnuplot graphics toolkit is implemented mostly in Octave

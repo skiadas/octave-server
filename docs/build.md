@@ -29,6 +29,16 @@ Two stages — only the second runs locally:
 Outputs (extracted to `dist/octave-wasm/`): `octave.js`, `octave.wasm`,
 `octave.data`.
 
+**Base versioning & CI:** the published base is `ghcr.io/skiadas/octave-base`,
+tagged `7.2.0-N` and freed by digest pinning; the package is public, so
+deploys pull it anonymously (no secrets needed for deploy). Recompiling the
+base is a manual, optional step — either the `Rebuild base image` workflow
+(Actions → "Run workflow", requires a `GHCR_PAT` repo secret: a PAT with
+`write:packages` on the owner account) or the documented `docker tag`/`push`
+commands. It has not yet been run live; see `docs/verification.md`. With
+`deploy.yml`, every push to `main` auto-rebuilds both wasm artifacts there and
+deploys to GitHub Pages.
+
 ```bash
 scripts/build-octave-wasm.sh
 ```
