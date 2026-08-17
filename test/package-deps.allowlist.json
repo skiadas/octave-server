@@ -138,9 +138,6 @@
   "group_size": {
     "reason": "LOCAL: variable in vartestn"
   },
-  "nelder_mead_min": {
-    "reason": "REAL-CROSS-FIXED: regdatasmooth.m default-optimizer dep. Dockerfile now ships pure-.m nelder_mead_min into the baked data-smoothing-forge tree; verified in-browser (which resolves, default GCV path returns 101 finite pts). Entry stays until the next octave-wasm rebuild publishes the file (then reclassifies BAKED and can be dropped)."
-  },
   "provided": {
     "reason": "LOCAL: variable in rgdtsmcore"
   },
