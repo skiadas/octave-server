@@ -1,6 +1,6 @@
 # Verification
 
-Status: **in progress — M3 battery renders 11/11 cases (harness times out under host load, not functional failures); Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green 10/10.**
+Status: **in progress — M3 render battery renders all 11 cases (GPU-bound renders are slow under host load — handled by caps + per-case retry, not functional failures); `verify:fast` 9/9 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green 10/10.**
 
 ## Gates
 
@@ -18,14 +18,30 @@ Status: **in progress — M3 battery renders 11/11 cases (harness times out unde
 ## How to run
 
 ```bash
-scripts/build.sh          # build both wasm artifacts
+scripts/build.sh          # build both wasm artifacts (only needed when they change)
 cd test && npm install     # once
-node octave-check.mjs     # Gates 1/1b/2 + plot smoke
-node verify.mjs           # Gates 3/4 battery in app/index.html
+node ui-unit.mjs          # FAST tier: UI glue logic with stubbed runtime (<1 s, no Chrome)
+node ui-smoke.mjs         # FAST tier: real octave-wasm boot, non-plot cases only (~1-2 min)
+node octave-check.mjs     # Gates 1/1b/2 + plot smoke (one render)
+node verify.mjs           # Gates 3/4 battery in app/index.html (slow renders)
 node symbolic-check.mjs   # Gate 1c/1d/1e + symbolic smoke (Puppeteer, needs network once for Pyodide/SymPy CDN)
 ```
 
-The harness (`test/verify.mjs`) runs this battery in `app/index.html`:
+For day-to-day UI work the wasm artifacts don't change, so the full battery is
+overkill: `npm run verify:fast` (battery minus the CPU-bound `mesh`/`surf`/
+`boxplot`/`imshow` render cases, with a tighter per-case cap of 2.5 min) covers
+everything else in a few minutes. Run the full `verify.mjs` only when
+`octave.wasm`/`gnuplot.wasm` change.
+
+The harness (`test/verify.mjs`) runs this battery in `app/index.html`. It is
+hardened against the CPU-bound gnuplot-wasm renderer: each case has a hard
+timeout (7 min full battery, 2.5 min `verify:fast`), a hung/crashed case is
+retried once on a fresh headless Chrome (host-load crashes are often
+transient), the HTTP server is revived if it died alongside the renderer, and
+Chrome + the HTTP server are always torn down (a bounded shutdown, plus stale
+Chrome/servers from aborted runs are killed on startup). A stall-guard
+force-exits if no progress line appears for 3 min, so a truly wedged run can
+never pin the shell.
 
 | Case | Command |
 |---|---|
@@ -40,6 +56,7 @@ The harness (`test/verify.mjs`) runs this battery in `app/index.html`:
 | boxplot (Forge stats) | `boxplot(randn(100,4))` |
 | imshow | `imshow(rand(50,50))` |
 | hold on | `plot(1:10); hold on; plot(1:5, "r-")` |
+| whole-file source | `runFile` of a multi-line `.m` (for loop + `printf` + `plot`) via the file editor hook |
 
 `boxplot`/`pca`/`kstest`/`anova1`/`kmeans`/`ttest`/`pdf` come from the Octave
 Forge `statistics` 1.6.0 `inst/` tree (baked into the wasm FS; see
@@ -59,17 +76,24 @@ Forge `statistics` 1.6.0 `inst/` tree (baked into the wasm FS; see
 - **Node gnuplot battery** `node gnuplot-node.mjs`: 4/4 pass (independent of
   Chrome; proves the script-generation + gnuplot path).
 - **Render battery** `node verify.mjs`: all 11 cases *render* (each produces
-  an SVG), but under current host load each gnuplot-wasm render takes 1–5
-  minutes, so the harness's per-case CDP timeout trips (e.g. after `surf`).
-  Verified individually: plot, hist, scatter, surf, mesh, contour, plot3,
-  bar, boxplot (Forge stats), imshow, hold-on all produce SVG output.
-  `surf(peaks(30))` alone: octave eval 0.3 s, gnuplot render ~215 s.
+  an SVG; verified individually: plot, hist, scatter, surf, mesh, contour,
+  plot3, bar, boxplot (Forge stats), imshow, hold-on).  `surf(peaks(30))`
+  alone: octave eval 0.3 s, gnuplot render ~215 s.
+- **Fast render battery** `SKIP_SLOW=1 node verify.mjs` / `npm run verify:fast`
+  (2026-08-17): **9/9 pass** — plot, histogram, scatter, contour, plot3, bar,
+  hold-on, whole-file source, and the run-button click, on one headless Chrome
+  (~5 min; a couple of cases restarted+retried cleanly under host load).
 - **Statistics:** `ttest` returns `h=0, p=1` on a symmetric sample;
   `pdf("norm",0,0,1)` returns `0.39894228…`.
 - **Symbolic values:** `syms x; diff(sin(x))` → `cos(x)`;
   `int(1/(x^2+1))` → `atan(x)`; `solve(x^2-4)` → `[-2 2]`;
   `laplace(t^2)` → `2/s**3`; `dsolve("D2y+y=0")` → `C1*sin(x)+C2*cos(x)`;
   `double(sym("sqrt(2)"))^2` → `2.0000`.
+  Exercise `app/examples/capability-demo.m` (whole-file run) passes end to end;
+  it documents workarounds for the two known shim gaps it hits: `regdatasmooth`
+  needs an explicit `"lambda"` (default optimizer is `optim`'s compiled
+  `nelder_mead_min`, not wasm-portable), and scalar/sym `mtimes`/`mrdivide`
+  aren't overloaded (use `sym("…")` string round-trips).
 
 ### CI auto-deploy (2026-08-17)
 
@@ -91,4 +115,7 @@ Forge `statistics` 1.6.0 `inst/` tree (baked into the wasm FS; see
 
 > **Perf caveat:** gnuplot-wasm SVG rendering is CPU-bound and headless-Chrome
 > renders under host load are the bottleneck.  This is environmental, not a
-> regression; the eval side is fast (fraction of a second).
+> regression; the eval side is fast (fraction of a second).  Under host load
+> the harness's per-case cap trips on the slow renders (`surf`, `boxplot`,
+> `mesh`, …); it restarts Chrome and retries each case once before reporting a
+> fail. Use `npm run verify:fast` to drop those cases from routine runs.

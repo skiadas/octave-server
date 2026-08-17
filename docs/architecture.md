@@ -80,7 +80,10 @@ go and how they are flushed.
   (libsvm `.oct` in the package's `src/` is not wasm-loadable and is excluded).
 - `data-smoothing-forge` (data-smoothing 1.3.0, pure `.m` `inst/` tree, no
   `PKG_ADD`) → first-pass addpath; provides `regdatasmooth` and friends for
-  smoothing noisy lab-style data.
+  smoothing noisy lab-style data.  **Caveat:** `regdatasmooth`'s default
+  auto-tuning calls `nelder_mead_min` from the `optim` package, whose compiled
+  `.oct` parts can't run in wasm — pass an explicit `"lambda"` value to use
+  the non-optimizing path (verified: `regdatasmooth(x, y, "lambda", 1e3)`).
 - `symbolic-sympy` — our own SymPy-backed symbolic shim (`patches/
   octave-m/scripts/symbolic-sympy`): a `classdef sym` with operator/function
   overloads plus `syms`, `dsolve`, and helpers, all round-tripping SymPy code
@@ -128,6 +131,10 @@ sym.m method  →  oo_sym_call("str(sympify('...').diff(...))")
   the shim (they'd be `NameError`s).
 - String literals use `"…"` with `\\` escapes, not bare `\` (a lone `\"`
   escapes the quote and corrupts the token stream).
+- **Mixed scalar/sym operators are not overloaded:** `double * sym` (`mtimes`)
+  and `double / sym` (`mrdivide`) raise "scalar cannot be indexed with .".
+  Build expressions via `sym("…")` string round-trips (`solve(sym("x**2 - 5*x
+  + 6"))`, `int(sym("1/(x^2+1)"), sym("x"))`) or keep both operands sym.
 
 ### Package importability tier list (pinned to core 7.2.0)
 
