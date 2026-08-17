@@ -31,8 +31,17 @@ PoC milestones for Route G. Each gate has a crisp pass/fail criterion.
 ### Gate 3 — Octave-generated gnuplot commands render (the critical gate)
 - **Question:** Does the toolkit's command output survive `popen` removal and
   render through gnuplot-wasm's SVG terminal?
-- **Battery:** `plot`, `plot3`, scatter, boxplot, `hist`, `surf`/`mesh`/`contour`,
+- **Battery:** `plot`, `plot3`, scatter, bar, boxplot, `hist`, `surf`/`mesh`/`contour`,
   `imshow`, `hold on`, multiple figures, `.octaverc`-free basics.
+- **Forge `statistics`:** `boxplot`, `pca`, `kstest`, `anova1`, `kmeans`, `ttest`,
+  `pdf`/`cdf`/`icdf`/`random` and ~370 more functions shipped (statistics 1.6.0,
+  pure-`.m` `inst/` tree; libsvm `.oct` excluded).
+- **Forge `data-smoothing`:** `regdatasmooth` (1.3.0, pure `.m`).
+- **Symbolic (SymPy bridge):** `syms`, `diff`, `int` (definite+indefinite),
+  `solve`, `simplify`, `limit`, `taylor`, `laplace`/`ilaplace`, `fourier`,
+  `fourier`, `dsolve` (with initial conditions), `subs`, `double`, `pretty`,
+  `latex`.  Verify-by: `test/symbolic-check.mjs` (Puppeteer, needs network for
+  the one-time Pyodide/SymPy CDN fetch).
 - **Fail fix:** targeted `.m` patches (terminal forcing, quoting, data embedding).
 
 ### Gate 4 — Multi-figure and flush correctness

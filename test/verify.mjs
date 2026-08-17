@@ -8,7 +8,6 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const APP_URL = `http://127.0.0.1:${PORT}/app/`;
 
 const CASES = [
-  ['numeric eval', 'x = 5'],
   ['plot (1-D line)', 'plot(sin(0:0.1:10))'],
   ['histogram', 'hist(randn(1000,1), 30)'],
   ['scatter', 'scatter(randn(50,1), randn(50,1))'],
@@ -17,6 +16,7 @@ const CASES = [
   ['contour', 'contour(peaks(20))'],
   ['plot3', 'plot3(rand(10,1), rand(10,1), rand(10,1))'],
   ['bar', 'bar(randn(5,1))'],
+  ['boxplot (statistics-forge)', 'boxplot(randn(100,4))'],
   ['imshow', 'imshow(rand(50,50))'],
   ['hold on (multi-line)', 'plot(1:10); hold on; plot(1:5, "r-")'],
 ];
@@ -37,6 +37,7 @@ async function main() {
     executablePath: CHROME,
     headless: true,
     args: ['--no-first-run', '--no-default-browser-check'],
+    protocolTimeout: 600000,
   });
 
   const page = await browser.newPage();

@@ -56,7 +56,10 @@ octave.o:
 oo-toolkit.o:
 	em++ $(EM_CXXFLAGS) $(EM_CFLAGS) -enable-emscripten-cxx-exceptions -c oo-toolkit.cc -o $@
 
-web/octave.js: octave.o oo-toolkit.o
+wasm-python.o:
+	em++ $(EM_CXXFLAGS) $(EM_CFLAGS) -enable-emscripten-cxx-exceptions -c wasm-python.cc -o $@
+
+web/octave.js: octave.o oo-toolkit.o wasm-python.o
 	mkdir -p web
 	em++ --bind $(EM_SFLAGS) -s EXPORTED_FUNCTIONS='["_main"]' -s EXPORTED_RUNTIME_METHODS='["FS","MEMFS"]' \
 	-s DEMANGLE_SUPPORT=0 \
@@ -92,11 +95,14 @@ web/octave.js: octave.o oo-toolkit.o
 	--preload-file $(MFILE_PATH)/startup@/usr/src/octave/m/startup \
 	--preload-file $(MFILE_PATH)/testfun@/usr/src/octave/m/testfun \
 	--preload-file $(MFILE_PATH)/web@/usr/src/octave/m/web \
+	--preload-file $(MFILE_PATH)/statistics-forge@/usr/src/octave/m/statistics-forge \
+	--preload-file $(MFILE_PATH)/symbolic-sympy@/usr/src/octave/m/symbolic-sympy \
+	--preload-file $(MFILE_PATH)/data-smoothing-forge@/usr/src/octave/m/data-smoothing-forge \
 	-s MODULARIZE=1 -s EXPORT_NAME=OCTAVE -s ENVIRONMENT="web" \
 	-s EXPORT_ES6=0 --post-js post.js \
 	$(EM_CFLAGS) $(EM_LDFLAGS) -o $@ $^
 
-worker/octave.js: octave.o oo-toolkit.o
+worker/octave.js: octave.o oo-toolkit.o wasm-python.o
 	mkdir -p worker
 	em++ --bind $(EM_SFLAGS) -s EXPORTED_FUNCTIONS='["_main"]' -s EXPORTED_RUNTIME_METHODS='["FS","MEMFS"]' \
 	-s DEMANGLE_SUPPORT=0 \
@@ -132,12 +138,15 @@ worker/octave.js: octave.o oo-toolkit.o
 	--embed-file $(MFILE_PATH)/startup@/usr/src/octave/m/startup \
 	--embed-file $(MFILE_PATH)/testfun@/usr/src/octave/m/testfun \
 	--embed-file $(MFILE_PATH)/web@/usr/src/octave/m/web \
+	--embed-file $(MFILE_PATH)/statistics-forge@/usr/src/octave/m/statistics-forge \
+	--embed-file $(MFILE_PATH)/symbolic-sympy@/usr/src/octave/m/symbolic-sympy \
+	--embed-file $(MFILE_PATH)/data-smoothing-forge@/usr/src/octave/m/data-smoothing-forge \
 	-s MODULARIZE=1 -s EXPORT_NAME=OCTAVE -s ENVIRONMENT="worker" \
 	-s EXPORT_ES6=1 -s SINGLE_FILE=1 \
 	--post-js post.js \
 	$(EM_CFLAGS) $(EM_LDFLAGS) -o $@ $^
 
-node/octave.js: octave.o oo-toolkit.o
+node/octave.js: octave.o oo-toolkit.o wasm-python.o
 	mkdir -p node
 	em++ --bind $(EM_SFLAGS) -s EXPORTED_FUNCTIONS='["_main"]' \
 	-s DEMANGLE_SUPPORT=0 \
@@ -173,6 +182,9 @@ node/octave.js: octave.o oo-toolkit.o
 	--embed-file $(MFILE_PATH)/startup@/usr/src/octave/m/startup \
 	--embed-file $(MFILE_PATH)/testfun@/usr/src/octave/m/testfun \
 	--embed-file $(MFILE_PATH)/web@/usr/src/octave/m/web \
+	--embed-file $(MFILE_PATH)/statistics-forge@/usr/src/octave/m/statistics-forge \
+	--embed-file $(MFILE_PATH)/symbolic-sympy@/usr/src/octave/m/symbolic-sympy \
+	--embed-file $(MFILE_PATH)/data-smoothing-forge@/usr/src/octave/m/data-smoothing-forge \
 	-s MODULARIZE=1 -s EXPORT_NAME=OCTAVE -s ENVIRONMENT="node" \
 	-s EXPORT_ES6=0 --post-js post.js \
 	$(EM_CFLAGS) $(EM_LDFLAGS) -o $@ $^

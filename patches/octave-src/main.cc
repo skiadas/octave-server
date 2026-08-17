@@ -12,11 +12,30 @@
 #include <parse.h>
 #include <interpreter.h>
 #include <builtin-defun-decls.h>
+#include <ov-builtin.h>
+#include <symtab.h>
 
 #include <emscripten.h>
 #include <emscripten/bind.h>
 
 void oo_register_gnuplot_toolkit (octave::interpreter& interp);
+
+// Defined in wasm-python.cc (DEFUN __wasm_python__).
+extern OCTAVE_EXPORT octave_value_list
+F__wasm_python__ (const octave_value_list& args, int nargout);
+
+// Register a DEFUN-compiled builtin on the interpreter's symbol table.
+// DEFUNs in standalone translation units are not part of the generated
+// builtin-defun-decls.h, so install_builtins() (called by the interpreter) is
+// blind to them.  This mirrors octave::install_dld_function's path.
+static void
+oo_install_builtin (octave::interpreter& interp, const std::string& name,
+                    octave_builtin::fcn fcn, const std::string& doc)
+{
+  octave_builtin* builtin = new octave_builtin (fcn, name, doc);
+  octave_value fval (builtin);
+  interp.get_symbol_table ().install_built_in_function (name, fval);
+}
 
 const std::string OBJ_TYPE_KEY = "$type";
 
@@ -326,6 +345,12 @@ int EMSCRIPTEN_KEEPALIVE execute_interp() {
   }
 
   try {
+    // First addpath pass: every category EXCEPT the two that carry PKG_ADD
+    // scripts (optimization, statistics-forge).  Within a single addpath
+    // call, functions from categories added in that same call are not yet
+    // visible to another category's PKG_ADD (>> optimization/PKG_ADD ->
+    // __all_opts__ -> optimset -> unique/set).  A second, separate addpath
+    // call below adds those so their PKG_ADD sees a fully live load path.
     octave_value_list octave_paths;
     octave_paths(0) = octave_value("/usr/src/octave/m/help:"
         "/usr/src/octave/m/general:"
@@ -354,17 +379,30 @@ int EMSCRIPTEN_KEEPALIVE execute_interp() {
         "/usr/src/octave/m/gui:"
         "/usr/src/octave/m/java:"
         "/usr/src/octave/m/ode:"
-        "/usr/src/octave/m/optimization:"
         "/usr/src/octave/m/prefs:"
         "/usr/src/octave/m/profiler:"
         "/usr/src/octave/m/signal:"
         "/usr/src/octave/m/special-matrix:"
         "/usr/src/octave/m/startup:"
         "/usr/src/octave/m/testfun:"
+        "/usr/src/octave/m/symbolic-sympy:"
+        "/usr/src/octave/m/data-smoothing-forge:"
         "/usr/src/octave/m/web", '\'');
     Faddpath(*interpreter, octave_paths);
 
+    // Second pass: PKG_ADD-bearing directories.  statistics-forge's PKG_ADD
+    // addpath's its own subdirs (datasets, dist_fit, dist_fun, dist_stat,
+    // shadow9), mirroring a real "pkg load".
+    octave_value_list octave_pkg_paths;
+    octave_pkg_paths(0) = octave_value("/usr/src/octave/m/optimization:"
+        "/usr/src/octave/m/statistics-forge", '\'');
+    Faddpath(*interpreter, octave_pkg_paths);
+
     oo_register_gnuplot_toolkit (*interpreter);
+
+    // Register our extra builtins (not present in builtin-defun-decls.h).
+    oo_install_builtin (*interpreter, "__wasm_python__", F__wasm_python__,
+                        "evaluate SymPy code in the host page's python runtime");
   } catch (const octave::exit_exception& ex) {
     return ex.exit_status();
   } catch (const octave::execution_exception& ex) {

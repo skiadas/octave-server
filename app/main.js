@@ -43,6 +43,30 @@
     outEl.scrollTop = outEl.scrollHeight;
   }
 
+  /* The FreeType warning is benign in this wasm build (the gnuplot toolkit
+     renders its own text; only Octave's auto label-extent probing triggers
+     it) and has no warning identifier, so it cannot be targeted with
+     warning("off", <id>) without disabling all warnings.  Suppress just this
+     block in the stderr stream. */
+  var suppressFreetypeBlock = false;
+  function isFreetypeWarningLine(line) {
+    return line.indexOf('render_text: support for rendering text (FreeType)') !== -1;
+  }
+  function isTracebackLine(line) {
+    return /^warning: called from/.test(line) || /^ {4}/.test(line);
+  }
+  function filterStderrLine(line) {
+    if (suppressFreetypeBlock) {
+      if (isTracebackLine(line)) return null;
+      suppressFreetypeBlock = false;
+    }
+    if (isFreetypeWarningLine(line)) {
+      suppressFreetypeBlock = true;
+      return null;
+    }
+    return line;
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
@@ -67,8 +91,14 @@
     var octaveConfig;
     octaveConfig = {
       locateFile: function (path) { return '../dist/octave-wasm/' + path; },
-      print: function (text) { append(text); },
-      printErr: function (text) { append(text, 'err'); },
+      print: function (text) { append(escapeHtml(String(text)) + '\n'); },
+      printErr: function (text) {
+        // Emscripten delivers one console line per call with the trailing
+        // newline stripped; restore it, and drop the benign FreeType block.
+        var line = filterStderrLine(String(text));
+        if (line === null) return;
+        append(escapeHtml(line) + '\n', 'err');
+      },
       postRun: function () {
         // postRun fires before the OCTAVE() promise resolves, so the runtime
         // methods are attached to the config object itself at this point.
@@ -133,7 +163,7 @@
       append('\nOctave not ready yet.\n');
       return;
     }
-    append('>> ' + cmd + '\n');
+    append('>> ' + escapeHtml(cmd) + '\n');
     lastError = '';
     var st = Module.eval_string(cmd);
     if (st !== 0) {
@@ -154,6 +184,69 @@
   });
 
   append('Loading Octave (wasm)…\n');
+
+  /* ---- Pyodide / SymPy bootstrap (synchronous bridge for symbolic math) ----
+     Octave runs on the main thread and Pyodide's runPython() is synchronous,
+     so the __wasm_python__ builtin in the octave build can round-trip SymPy
+     code text to window.__ooWasmPython below with no async plumbing.  Loaded
+     from the JsDelivr CDN (pinned to v314.0.4); failures degrade gracefully —
+     symbolic functions will raise a clear "bridge not available" error. */
+  function ooSymPySetupSource() {
+    return [
+      'from sympy import *',
+      "x, y, t, s, z, n = symbols('x y t s z n')",
+      'import re as _ore',
+      'def _oo_dsolve(eqs, ics):',
+      '    s = eqs.strip()',
+      "    fns = set(m.group(2) for m in _ore.finditer(r'D(\\d*)([A-Za-z_]\\w*)', s))",
+      "    s = _ore.sub(r'D(\\d*)([A-Za-z_]\\w*)',",
+      "                lambda m: 'Derivative(%s(x), x, %s)' % (m.group(2), m.group(1) or '1'), s)",
+      '    for fn in fns:',
+      "        s = _ore.sub(r'(?<![A-Za-z_(.])%s(?!\\()' % fn, fn + '(x)', s)",
+      "    lhs, _, rhs = s.partition('=')",
+      "    ode = Eq(sympify(lhs, locals={'x': Symbol('x')}), sympify(rhs, locals={'x': Symbol('x')}))",
+      '    ics_d = {}',
+      '    for c in ics:',
+      '        c = c.strip()',
+      "        left, _, val = c.partition('=')",
+      '        left = left.strip(); val = sympify(val)',
+      "        m = _ore.match(r'D(\\d*)([A-Za-z_]\\w*)\\(([^)]*)\\)', left)",
+      '        if m:',
+      '            fn = m.group(2); pt = Symbol(m.group(3))',
+      '            ics_d[Derivative(Function(fn)(pt), pt, int(m.group(1) or 1))] = val',
+      '        else:',
+      "            m = _ore.match(r'([A-Za-z_]\\w*)\\(([^)]*)\\)', left)",
+      '            fn = m.group(1); pt = Symbol(m.group(2))',
+      '            ics_d[Function(fn)(pt)] = val',
+      '    sol = dsolve(ode, ics=ics_d) if ics_d else dsolve(ode)',
+      '    if ics_d:',
+      '        sol = simplify(sol)',
+      '    return sol'
+    ].join('\n');
+  }
+
+  function bootstrapSympy() {
+    if (typeof loadPyodide !== 'function') {
+      console.warn('Pyodide not loaded (CDN unreachable?) — symbolic disabled');
+      return;
+    }
+    loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v314.0.4/full/' })
+      .then(function (py) {
+        return py.loadPackage('sympy').then(function () {
+          py.runPython(ooSymPySetupSource());
+          window.__ooWasmPython = function (code) {
+            return String(py.runPython(code));
+          };
+          window.__ooSympyReady = true;
+          if (typeof statusEl !== 'undefined') setStatus('Octave ready — symbolic (SymPy) loaded');
+        });
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        console.warn('SymPy init failed:', msg.slice(0, 500));
+      });
+  }
+  bootstrapSympy();
 
   /* Test hook for scripts/verify.mjs */
   window.__oo = {

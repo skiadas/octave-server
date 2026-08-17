@@ -29,7 +29,8 @@
   <header>Octave Web PoC &mdash; Route G (octave-wasm + gnuplot-wasm)</header>
   <main>
     <div id="consolePane">
-      <pre id="output">Loading…</pre>
+      <pre id="output">Loading…
+</pre>
       <div id="cmdRow"><input id="cmd" type="text" placeholder="octave&gt; plot(sin(0:0.1:10))" autocomplete="off" spellcheck="false"></div>
       <div id="status"></div>
     </div>
@@ -37,6 +38,7 @@
   </main>
   <script src="../dist/gnuplot-wasm/gnuplot.js"></script>
   <script src="../dist/octave-wasm/octave.js"></script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v314.0.4/full/pyodide.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

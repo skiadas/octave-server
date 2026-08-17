@@ -3,8 +3,8 @@
 This document describes the architecture for **Route G**: a fully client-side
 Octave environment for the browser, with plotting rendered by gnuplot-wasm.
 
-Status: **draft** — written ahead of the M1–M3 PoC; will be corrected against
-actual findings.
+Status: **in progress** — written ahead of/during the M1–M3 PoC; corrected
+against actual findings as they land.
 
 ## 1. Context and goals
 
@@ -23,6 +23,7 @@ a polished shell. These are deliberately left open.
 |---|---|---|
 | `octave.wasm` | `rwl/octave-wasm` (Octave 7.2.0, Emscripten) | Interpreter + numeric core + graphics object model |
 | `gnuplot.wasm` | `Eumeryx/gnuplot-wasm` (gnuplot 5.4.10, Emscripten) | SVG renderer; consumes gnuplot scripts |
+| Pyodide/SymPy | JsDelivr CDN (v314.0.4, pinned) | In-browser Python + SymPy for the symbolic shim |
 | App shell (`app/`) | ours | Console, plot panel, worker orchestration |
 | JS bridge | ours | Moves gnuplot scripts + SVG between the two wasm modules |
 
@@ -61,8 +62,77 @@ go and how they are flushed.
   + `load_toolkit(...)` at interpreter startup, so
   `graphics_toolkit("gnuplot")` works and `gnuplot` becomes the default
   toolkit.
-- Build flags: `plot/` + `image/` m-file categories added to the emscripten
-  preload lists and to the load path in `main.cc`.
+- Build flags: all m-file categories appended to the emscripten preload lists
+  and to the load path in `main.cc`, plus the Octave Forge `statistics` 1.6.0
+  `inst/` tree (`statistics-forge`) — baked in at image build, preloaded, and
+  addpath'd in **two passes** (essentials first, then the PKG_ADD-bearing
+  `optimization`/`statistics-forge` dirs).
+- `statistics-forge`'s `PKG_ADD` addpath's `datasets`, `dist_fit`,
+  `dist_fun`, `dist_stat`, and `shadow9` at startup, mirroring `pkg load`
+  (libsvm `.oct` in the package's `src/` is not wasm-loadable and is excluded).
+- `data-smoothing-forge` (data-smoothing 1.3.0, pure `.m` `inst/` tree, no
+  `PKG_ADD`) → first-pass addpath; provides `regdatasmooth` and friends for
+  smoothing noisy lab-style data.
+- `symbolic-sympy` — our own SymPy-backed symbolic shim (`patches/
+  octave-m/scripts/symbolic-sympy`): a `classdef sym` with operator/function
+  overloads plus `syms`, `dsolve`, and helpers, all round-tripping SymPy code
+  **text** to the host browser via the `__wasm_python__` builtin.
+
+### Layer 1b — Symbolic math (Pyodide/SymPy bridge)
+
+The Octave Forge `symbolic` package cannot run in wasm (its core is a
+popen/pexpect bridge to a real `python` subprocess).  Instead, because the
+app runs Octave on the **main thread** and Pyodide's `py.runPython()` is
+**synchronous**, we bridge in-process:
+
+```
+sym.m method  →  oo_sym_call("str(sympify('...').diff(...))")
+             →  __wasm_python__  (wasm-python.cc, DEFUN, EM_JS)
+             →  window.__ooWasmPython(code)  →  pyodide.runPython(code)
+             →  string back through the same path
+```
+
+- `wasm-python.cc` defines the `__wasm_python__` builtin (registered at
+  interpreter init in `main.cc` via `symbol_table::install_built_in_function`,
+  mirroring `install_dld_function`, because standalone `DEFUN`s are not in the
+  generated `builtin-defun-decls.h`).
+- Pyodide 314.0.4 (Python 3.14, ships SymPy 1.13.3) is loaded from the JsDelivr
+  CDN in `app/main.js` in parallel with the Octave boot; a warmup snippet
+  installs `x,y,t,s,z,n` symbols and the `_oo_dsolve` ODE translator.  Failures
+  degrade gracefully: symbolic calls raise a clear "bridge not available"
+  error, and Octave/plotting still works.
+- Scope: undergrad-level CAS (`syms`, `diff`, `int`, `solve`, `simplify`,
+  `expand`, `factor`, `limit`, `taylor`, `laplace`/`ilaplace`, `fourier`,
+  `fourier`, `dsolve`, `subs`, `pretty`, `latex`, `double`).  Not a full
+  MATLAB Symbolic Toolbox replacement, and no `symfun`/matrix-sym support yet.
+
+#### Known quirks (learned the hard way, 2026-08-16)
+
+- **Octave 7.2 parser rejects `[ "…" func() "…" ]`** — i.e. string
+  concatenation in square brackets whose second element is a function call
+  (`["[" strjoin (x, ", ") "]"]`).  Use `strcat (...)` or `sprintf` instead
+  (see `oo_pyquote.m`, `oo_pyexpr.m`, `dsolve.m`).
+- **`"'"` (a double-quoted string containing a single quote) is fine only
+  inside `strcat`/`sprintf` args; combined with the bracket-concat above it
+  triggers the same parse failure.  Prefer `char (39)` / `strcat` for quote
+  IDKs.
+- **SymPy 1.13 removed `ztrans`/`iztrans`** — so `ztrans`/`iztrans` are not in
+  the shim (they'd be `NameError`s).
+- String literals use `"…"` with `\\` escapes, not bare `\` (a lone `\"`
+  escapes the quote and corrupts the token stream).
+
+### Package importability tier list (pinned to core 7.2.0)
+
+- **Drop-in (pure `.m`, our pipeline):** `statistics` 1.6.0 (imported),
+  `data-smoothing` 1.3.0 (imported), `financial` 0.5.3 (would drag in `io`).
+- **Compiled `.oct` in `src/` — NOT importable as-is (needs mkoctfile→wasm +
+  dlopen, out of scope):** `optim` 1.6.3 (needs `struct`+`statistics`),
+  `signal` 1.4.6 (needs `control` ≥2.4), `control` 3.5.0 (Fortran SLICOT —
+  worst case), `image` 2.18.0 (the newest release compatible with Octave 7.2;
+  anything newer needs ≥8), `io` 2.7.2 (also Java for Excel), `econometrics`.
+- **Infeasible in-browser:** `symbolic` (subprocess+SymPy → replaced by our
+  shim), anything with a Java/OS runtime dependency.  Note `image 2.18.0` is
+  *the* version to use if we ever port the compiled parts.
 
 ### Layer 2 — JS bridge
 
