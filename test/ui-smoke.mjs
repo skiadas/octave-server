@@ -8,7 +8,7 @@ import puppeteer from 'puppeteer-core';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const PORT = 8095;
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const APP_URL = `http://127.0.0.1:${PORT}/app/`;
 
 let server;
@@ -48,7 +48,11 @@ async function main() {
       else req.continue();
     });
 
-    await page.goto(APP_URL, { waitUntil: 'load', timeout: 120000 });
+    await page.goto(APP_URL, { waitUntil: 'load', timeout: 120000 }).catch(async (e) => {
+      // Sandbox proxies can transiently refuse a fresh connection; retry once.
+      await new Promise((r) => setTimeout(r, 3000));
+      await page.goto(APP_URL, { waitUntil: 'load', timeout: 120000 });
+    });
     await page.waitForFunction('window.__oo && window.__oo.ready === true', { timeout: 180000 })
       .catch(() => { throw new Error('Octave not ready: ' + page.$eval('#status', (e) => e.textContent)); });
 

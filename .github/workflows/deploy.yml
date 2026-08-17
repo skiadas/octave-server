@@ -22,14 +22,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # gnuplot-wasm (fast: emsdk pull + compile).
       - name: Build gnuplot-wasm
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: scripts/gnuplot-wasm.Dockerfile
@@ -43,7 +43,7 @@ jobs:
       # digest from scripts/octave-wasm.Dockerfile). ~5-15 min on first run,
       # layer-cached afterwards.
       - name: Build octave-wasm
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: scripts/octave-wasm.Dockerfile
@@ -84,10 +84,10 @@ jobs:
           EOF
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

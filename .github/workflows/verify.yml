@@ -1,0 +1,120 @@
+name: Verify
+
+# Non-deploying dependency + fast-UI gate. Runs ONLY when the inputs it guards
+# change (baked m-trees, the Dockerfiles that bake them, the gate/UI test code,
+# or the app shell), so docs/CI-only pushes skip it. Never publishes anything —
+# it exists to catch a broken dependency set or UI-wiring regression BEFORE a
+# commit-build ships them. Strict: any failed step fails the job.
+#
+# It builds the same artifacts deploy.yml does (reusing the shared GH action
+# cache), boots them headless, and checks:
+#   - test/package-deps.mjs : every call site in the baked m-trees resolves at
+#     runtime (which) or is allowlisted — 0 GAPS required.
+#   - test/ui-unit.mjs     : app/main.js glue logic with a stubbed runtime.
+#   - test/ui-smoke.mjs    : real octave-wasm boot + UI wiring, no gnuplot render.
+
+on:
+  push:
+    branches: [main]
+    # Only the inputs that could affect baked-tree dependencies or UI wiring.
+    paths:
+      - 'patches/octave-m/**'
+      - 'patches/octave-src/**'
+      - 'scripts/*.Dockerfile'
+      - 'scripts/build*.sh'
+      - 'app/**'
+      - 'test/package-deps*.mjs'
+      - 'test/ui-unit.mjs'
+      - 'test/ui-smoke.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # gnuplot-wasm (fast: emsdk pull + compile).
+      - name: Build gnuplot-wasm
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: scripts/gnuplot-wasm.Dockerfile
+          platforms: linux/amd64
+          tags: oo-gnuplot-wasm:latest
+          load: true
+          cache-from: type=gha,scope=gnuplot
+          cache-to: type=gha,mode=max,scope=gnuplot
+
+      # octave-wasm (patched relink FROM the frozen GHCR base, pulled by digest).
+      - name: Build octave-wasm
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: scripts/octave-wasm.Dockerfile
+          platforms: linux/amd64
+          tags: oo-octave-wasm:latest
+          load: true
+          cache-from: type=gha,scope=octave
+          cache-to: type=gha,mode=max,scope=octave
+
+      - name: Extract artifacts into repo dist/
+        run: |
+          set -euo pipefail
+          mkdir -p site/dist/gnuplot-wasm site/dist/octave-wasm
+          docker create --name gp oo-gnuplot-wasm:latest
+          docker cp gp:/src/dist/. site/dist/gnuplot-wasm/
+          docker rm gp >/dev/null
+          docker create --name oc oo-octave-wasm:latest
+          docker cp oc:/usr/src/octave-wasm/src/web/. site/dist/octave-wasm/
+          docker rm oc >/dev/null
+          # The gate/UI tests serve repo-root `app/`, which loads `../dist/...`.
+          mkdir -p dist
+          cp -r site/dist/gnuplot-wasm dist/gnuplot-wasm
+          cp -r site/dist/octave-wasm dist/octave-wasm
+
+      # GitHub-hosted ubuntu runners ship google-chrome; locate it and export
+      # CHROME_PATH so the puppeteer scripts use it instead of their mac
+      # default.
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: test/package-lock.json
+      - name: Install test deps
+        working-directory: test
+        run: npm ci
+
+      - name: Chrome executable
+        run: |
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "CHROME_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          elif command -v google-chrome-stable >/dev/null 2>&1; then
+            echo "CHROME_PATH=$(command -v google-chrome-stable)" >> "$GITHUB_ENV"
+          else
+            echo "::error::No chrome found; expected google-chrome or google-chrome-stable on the runner"
+            exit 1
+          fi
+
+      - name: Fast UI glue tests (no browser)
+        working-directory: test
+        run: node ui-unit.mjs
+
+      - name: Dependency gate (baked m-trees resolve)
+        working-directory: test
+        run: node package-deps.mjs
+
+      - name: UI smoke (real octave-wasm boot, non-plot)
+        working-directory: test
+        run: node ui-smoke.mjs
