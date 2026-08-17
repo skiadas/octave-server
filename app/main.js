@@ -6,6 +6,9 @@
   var cmdEl = document.getElementById('cmd');
   var statusEl = document.getElementById('status');
   var plotEl = document.getElementById('plotPane');
+  var editorEl = document.getElementById('editor');
+  var filenameEl = document.getElementById('filename');
+  var runBtnEl = document.getElementById('runBtn');
 
   var Module = null;          // octave runtime (after OCTAVE() resolves)
   var lastPlotLen = 0;        // length of last /plot.gp bytes we rendered
@@ -183,6 +186,58 @@
     }
   });
 
+  /* Run a whole script file: write the editor contents into the Emscripten
+     virtual filesystem, then evaluate the text directly.  (Octave's source()
+     would be the natural fit, but in this wasm build it swallows errors —
+     eval_string reports them just like run() does.) */
+  function runFile(text) {
+    if (!ready) {
+      append('\nOctave not ready yet.\n');
+      return;
+    }
+    // Only a real string is writable to MEMFS; a DOM listener that calls us
+    // with a click Event must fall back to the editor contents.
+    if (typeof text !== 'string') text = editorEl.value;
+    var name = (filenameEl.value || 'script.m').trim();
+    if (!/^[A-Za-z0-9_.\/-]+$/.test(name)) {
+      append('\nInvalid file name: ' + escapeHtml(name) + '\n', 'err');
+      return;
+    }
+    var path = '/' + name.replace(/^\/+/, '');
+    try {
+      Module.FS.writeFile(path, text);
+    } catch (e) {
+      append('\nCould not write ' + escapeHtml(name) + ': ' +
+        escapeHtml(e && e.message ? e.message : String(e)) + '\n', 'err');
+      return;
+    }
+    append('>> run ' + escapeHtml(name) + '\n');
+    lastError = '';
+    var st = Module.eval_string(text);
+    if (st !== 0) {
+      lastError = Module.last_error_message();
+      append('\n' + lastError + '\n', 'err');
+    }
+    Module.eval_string('drawnow;');
+    renderPlot();
+  }
+
+  runBtnEl.addEventListener('click', function () {
+    runFile();
+  });
+  editorEl.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
+      ev.preventDefault();
+      runFile();
+    } else if (ev.key === 'Tab') {
+      ev.preventDefault();
+      var s = editorEl.selectionStart;
+      var e = editorEl.selectionEnd;
+      editorEl.value = editorEl.value.slice(0, s) + '  ' + editorEl.value.slice(e);
+      editorEl.selectionStart = editorEl.selectionEnd = s + 2;
+    }
+  });
+
   append('Loading Octave (wasm)…\n');
 
   /* ---- Pyodide / SymPy bootstrap (synchronous bridge for symbolic math) ----
@@ -255,6 +310,7 @@
     get lastError() { return lastError; },
     get status() { return statusEl.textContent; },
     run: run,
+    runFile: runFile,
     plotSVGCount: function () { return plotEl.querySelectorAll('svg').length; },
     lastPlotLength: function () { return lastPlotLen; },
     awaitRender: function () { return renderInFlight; }

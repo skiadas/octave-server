@@ -8,8 +8,19 @@
     body { font-family: -apple-system, system-ui, sans-serif; margin: 0; }
     header { padding: 8px 12px; background: #222; color: #fff; font-size: 14px; }
     main { display: flex; flex-direction: row; gap: 8px; padding: 8px; height: calc(100vh - 60px); }
-    #consolePane { flex: 1 1 50%; display: flex; flex-direction: column; min-width: 0; }
-    #plotPane { flex: 1 1 50%; border: 1px solid #ccc; overflow: auto; min-width: 0; }
+    #editorPane { flex: 1 1 25%; display: flex; flex-direction: column; min-width: 0; }
+    #editorBar { display: flex; gap: 4px; padding-bottom: 4px; }
+    #filename {
+      flex: 1; min-width: 0; font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px; padding: 4px 6px; border: 1px solid #888;
+    }
+    #runBtn { padding: 4px 10px; font-size: 12px; cursor: pointer; }
+    #editor {
+      flex: 1 1 auto; resize: none; font-family: ui-monospace, Menlo, monospace;
+      font-size: 13px; padding: 8px; border: 1px solid #888; white-space: pre; overflow: auto;
+    }
+    #consolePane { flex: 1 1 40%; display: flex; flex-direction: column; min-width: 0; }
+    #plotPane { flex: 1 1 35%; border: 1px solid #ccc; overflow: auto; min-width: 0; }
     #plotPane svg { max-width: 100%; height: auto; display: block; margin: 8px; border: 1px solid #eee; }
     #output {
       flex: 1 1 auto; overflow: auto; background: #111; color: #ddd;
@@ -28,6 +39,13 @@
 <body>
   <header>Octave Web PoC &mdash; Route G (octave-wasm + gnuplot-wasm)</header>
   <main>
+    <div id="editorPane">
+      <div id="editorBar">
+        <input id="filename" type="text" value="script.m" autocomplete="off" spellcheck="false">
+        <button id="runBtn" type="button">Run (Ctrl+Enter)</button>
+      </div>
+      <textarea id="editor" spellcheck="false" placeholder="% Write a full Octave script, then press Ctrl+Enter to run it."></textarea>
+    </div>
     <div id="consolePane">
       <pre id="output">Loading…
 </pre>
