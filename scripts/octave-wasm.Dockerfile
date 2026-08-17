@@ -36,6 +36,16 @@ RUN curl -fsSL -o /tmp/data-smoothing-1.3.0.tar.gz \
       /usr/src/octave-wasm/target/share/octave/7.2.0/m/data-smoothing-forge \
   && rm -rf /tmp/data-smoothing-1.3.0.tar.gz /tmp/data-smoothing
 
+# Single-file compat import: nelder_mead_min (GPL-3, optim-1.6.2 inst/) is the
+# pure-.m function behind regdatasmooth's auto-lambda (GCV) path. It has no
+# dependencies, so we ship just this file rather than the whole `optim`
+# package (whose m-layer needs its compiled .oct core, the `struct` package,
+# and process/parallel features the wasm sandbox can't provide). Lives here so
+# it rides the data-smoothing-forge preload + addpath with zero Makefile/main
+# changes.
+COPY patches/octave-m/scripts/data-smoothing-forge/nelder_mead_min.m \
+     /usr/src/octave-wasm/target/share/octave/7.2.0/m/data-smoothing-forge/nelder_mead_min.m
+
 # Our SymPy-backed symbolic shim (patches/octave-m/scripts/symbolic-sympy).
 COPY patches/octave-m/scripts/symbolic-sympy/ \
      /usr/src/octave-wasm/target/share/octave/7.2.0/m/symbolic-sympy/
