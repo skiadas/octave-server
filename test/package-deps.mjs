@@ -186,6 +186,17 @@ async function sweepPage(trees) {
     }).join('\n');
   }
 
+  // Octave string literals carry payload that is NOT resolved by Octave: the
+  // shim embeds Pyodide/SymPy code ("str(fourier_transform(...))"), `eval` /
+  // `feval` / `system` string bodies, help text, etc. Mask the *contents* (keep
+  // the quotes) so call-site extraction can't mistake a Python/SymPy function
+  // name for an Octave dependency. Handles the common forms: '…', "…", `` … ``.
+  function stripStrings(src) {
+    return src.replace(/'(?:''|[^'])*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (m) => {
+      return m[0] + m.slice(1, -1).replace(/\S/g, ' ') + m[m.length - 1];
+    });
+  }
+
   function localNames(src) {
     const s = new Set();
     let m;
@@ -206,22 +217,31 @@ async function sweepPage(trees) {
   const counts = Object.create(null); // token -> { n, files:[...] }
   const shellouts = [];               // { file, line, hit }
   let mFiles = 0;
+  const classMethods = new Set(); // method names from baked classdef files
+  // classdef method header: `function [o1,o2] = name(self, ...)` / `function name(self, ...)`
+  const classMethodRe = /\bfunction\s+(?:\[[^\]]*\]\s*=\s*|[A-Za-z_]\w*\s*=\s*)?([A-Za-z_]\w*)\s*\(/gm;
   for (const name of Object.keys(files)) {
     for (const f of files[name]) {
       mFiles++;
       let src = '';
       try { src = M.FS.readFile(f, { encoding: 'utf8' }); } catch (e) { continue; }
+      if (f.indexOf('/@') >= 0) {
+        let mm; classMethodRe.lastIndex = 0;
+        while ((mm = classMethodRe.exec(src))) classMethods.add(mm[1]);
+      }
       const lines = src.split('\n');
       for (let i = 0; i < lines.length; i++) {
         if (shellRe.test(stripComments(lines[i]))) shellouts.push({ file: f, line: i + 1, hit: lines[i].trim().slice(0, 70) });
       }
       const locals = localNames(src);
-      const code = stripComments(src);
+      // strip comments, THEN mask string contents: order matters (strings can
+      // contain `%`, and comments are gone before we care about quotes).
+      const code = stripStrings(stripComments(src));
       const seen = new Set();
       function add(tok) {
         if (seen.has(tok)) return;
         seen.add(tok);
-        if (locals.has(tok) || KEYWORDS.has(tok)) return;
+        if (locals.has(tok) || KEYWORDS.has(tok) || classMethods.has(tok)) return;
         counts[tok] = counts[tok] || { n: 0, files: [] };
         counts[tok].n++;
         if (counts[tok].files.length < 3) counts[tok].files.push(f);
@@ -247,9 +267,9 @@ async function sweepPage(trees) {
     const s = Array.isArray(w) && w.length ? String(w[0]) : '';
     if (!s) {
       // which() may print an error to stderr for unknown names; if the name is
-      // nonetheless the basename of a shipped m-file (e.g. an @sym class
-      // method), the call resolves inside the baked trees -> not a gap.
-      if (bakedNames.has(tok)) {
+      // nonetheless the basename of a shipped m-file, or a method on a baked
+      // classdef object (dispatches at runtime), it resolves in the tree.
+      if (bakedNames.has(tok) || classMethods.has(tok)) {
         cats.BAKED++;
         continue;
       }
@@ -318,6 +338,17 @@ async function runAudit(updateAllowlist) {
     if (unallowed.length === 0) console.log('  (none)');
     const listed = gaps.filter((t) => allow[t]);
     if (listed.length) console.log(`  (${listed.length} allowlisted — reasons cached in ${ALLOWLIST.split('/').pop()})`);
+
+    // Maintenance: allowlist entries whose identifier is no longer NOT-FOUND
+    // (reclassified BAKED/CORE/etc. by a rebuild or audit improvement) are
+    // stale and can be pruned.
+    const gapSet = new Set(gaps);
+    const stale = Object.keys(allow).filter((t) => !t.startsWith('_') && !gapSet.has(t));
+    if (stale.length) {
+      console.log(`\nSTALE allowlist entries (no longer NOT-FOUND — safe to prune): ${stale.length}`);
+      console.log('  ' + stale.sort().join(', '));
+    }
+
     console.log('\n' + (unallowed.length ? `GATE FAIL: ${unallowed.length} un-allowlisted dependencies.` : 'GATE PASS: no un-allowlisted dependencies.'));
     return unallowed.length ? 1 : 0;
   } finally {

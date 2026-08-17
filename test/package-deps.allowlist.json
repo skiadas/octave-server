@@ -1,82 +1,159 @@
 {
   "_comment": "Allowlist for test/package-deps.mjs. Each key is an identifier used in the shipped m-trees (statistics-forge / data-smoothing-forge / symbolic-sympy) that `which` could not resolve against the real wasm build at audit time. Reasons: LOCAL = false positive (variable/subfunction/struct-field use that static extraction can't classify); CORE-MISSING = legit octave core function absent from this build; REAL-CROSS = genuine dependency outside the shipped trees (the gate's main quarry); BRIDGE = resolved by the symbolic Python bridge, not octave. Regenerate drafts: node package-deps.mjs --update-allowlist",
-  "F": { "reason": "LOCAL: function-handle/result variable in anova2/cdfplot/wblplot" },
-  "values": { "reason": "LOCAL: cell/matrix variable indexed as values(...)" },
-  "stdnormal_cdf": { "reason": "CORE-MISSING: octave stdnormal_cdf not in this build; dist_fun falls back to own implementation — verify call sites" },
-  "srtcat": { "reason": "REAL: looks like typo of strcat in bartlett_test/levene_test (package bug — confirm harmless)" },
-  "R": { "reason": "LOCAL: variable in betalike/wblplot" },
-  "PARAMS": { "reason": "LOCAL: struct field in binolike/nbinlike" },
-  "data": { "reason": "LOCAL: variable indexed in mvncdf/mvtcdf" },
-  "H": { "reason": "LOCAL: variable in ecdf/monotone_smooth" },
-  "value": { "reason": "LOCAL: variable in kruskalwallis/oo_pyexpr" },
-  "str": { "reason": "LOCAL: variable in sym.m/dsolve" },
-  "sympify": { "reason": "BRIDGE: python-side sympify helper, resolved via wasm-python bridge" },
-  "fourth": { "reason": "LOCAL: variable in anova1" },
-  "FORMULA": { "reason": "LOCAL: uppercase variable in anovan" },
-  "PARAMETERS": { "reason": "LOCAL: uppercase variable in anovan" },
-  "TABLE": { "reason": "LOCAL: uppercase variable in anovan" },
-  "freedom": { "reason": "LOCAL: variable in anovan" },
-  "x": { "reason": "LOCAL: variable in anovan" },
-  "fifth": { "reason": "LOCAL: variable in binotest" },
-  "Symbol": { "reason": "LOCAL: variable in boxplot" },
-  "character": { "reason": "LOCAL: variable in boxplot" },
-  "formalism": { "reason": "LOCAL: variable in boxplot" },
-  "xx": { "reason": "LOCAL: variable in cdfplot/fitgmdist" },
-  "yy": { "reason": "LOCAL: variable in cdfplot/fitgmdist" },
-  "usage": { "reason": "LOCAL: variable in cmdscale" },
-  "sizes": { "reason": "LOCAL: variable in dcov" },
-  "F_y": { "reason": "LOCAL: variable in evfit" },
-  "evaluations": { "reason": "LOCAL: variable in evfit" },
-  "nll": { "reason": "LOCAL: variable in gevlike" },
-  "p": { "reason": "LOCAL: variable in normfit" },
-  "q": { "reason": "LOCAL: variable in normfit" },
-  "lb": { "reason": "LOCAL: variable in poissfit" },
-  "paramhatEV": { "reason": "LOCAL: variable in wblfit" },
-  "paramciEV": { "reason": "LOCAL: variable in wblfit" },
-  "strcar": { "reason": "LOCAL/typo-guard: single occurrence in copulacdf" },
-  "strcaty": { "reason": "LOCAL/typo-guard: single occurrence in copularnd" },
-  "stdnormal_pdf": { "reason": "CORE-MISSING: octave stdnormal_pdf not in this build — verify call sites in jsupdf" },
-  "u": { "reason": "LOCAL: variable in vmrnd" },
-  "interval": { "reason": "LOCAL: variable in betafit" },
-  "entries": { "reason": "LOCAL: variable in fishertest" },
-  "exists": { "reason": "LOCAL: variable in fitgmdist" },
-  "components": { "reason": "LOCAL: variable in fitgmdist" },
-  "gl_s": { "reason": "LOCAL: variable in grp2idx" },
-  "xbin": { "reason": "LOCAL: variable in histfit" },
-  "initializers": { "reason": "LOCAL: variable in kmeans" },
-  "centroids": { "reason": "LOCAL: variable in kmeans" },
-  "initializer": { "reason": "LOCAL: variable in kmeans" },
-  "xr": { "reason": "LOCAL: variable in kruskalwallis" },
-  "sampleCDF": { "reason": "LOCAL: variable in kstest" },
-  "comparisons": { "reason": "LOCAL: variable in multcompare" },
-  "parcellfun": { "reason": "REAL-CROSS: parallel-package function behind an optional exist() guard in multcompare; not shipped — dead in wasm, confirm path never taken" },
-  "ps": { "reason": "LOCAL: variable in multcompare" },
-  "U": { "reason": "LOCAL: variable in pcacov" },
-  "V": { "reason": "LOCAL: variable in pcares" },
-  "eigvec": { "reason": "LOCAL: variable in plsregress" },
-  "p_val": { "reason": "LOCAL: variable in ranksum" },
-  "r1testN": { "reason": "LOCAL: variable in sampsizepwr" },
-  "b_j": { "reason": "LOCAL: variable in stepwisefit" },
-  "bint_j": { "reason": "LOCAL: variable in stepwisefit" },
-  "b_new": { "reason": "LOCAL: variable in stepwisefit" },
-  "bint_new": { "reason": "LOCAL: variable in stepwisefit" },
-  "count": { "reason": "LOCAL: variable in tabulate" },
-  "sx": { "reason": "LOCAL: variable in tiedrank" },
-  "x_var": { "reason": "LOCAL: variable in vartest2" },
-  "y_var": { "reason": "LOCAL: variable in vartest2" },
-  "group_mean": { "reason": "LOCAL: variable in vartestn" },
-  "statistic": { "reason": "LOCAL: variable in vartestn" },
-  "group_size": { "reason": "LOCAL: variable in vartestn" },
-  "z": { "reason": "LOCAL: variable in violin" },
-  "nelder_mead_min": { "reason": "REAL-CROSS-FIXED: regdatasmooth.m default-optimizer dep. Dockerfile now ships pure-.m nelder_mead_min into the baked data-smoothing-forge tree; verified in-browser (which resolves, default GCV path returns 101 finite pts). Entry stays until the next octave-wasm rebuild publishes the file (then reclassifies BAKED and can be dropped)." },
-  "provided": { "reason": "LOCAL: variable in rgdtsmcore" },
-  "float": { "reason": "REAL-CROSS: @sym/float method invoked; symbolic-sympy ships only a 6-file subset — full @sym class methods not baked. Confirm the sym() path guards these." },
-  "integrate": { "reason": "REAL-CROSS: @sym/integrate method, not baked in the symbolic subset" },
-  "series": { "reason": "REAL-CROSS: @sym/series method, not baked in the symbolic subset" },
-  "laplace_transform": { "reason": "REAL-CROSS: symbolic laplace_transform helper, not baked in the subset" },
-  "inverse_laplace_transform": { "reason": "REAL-CROSS: symbolic inverse_laplace_transform helper, not baked in the subset" },
-  "fourier_transform": { "reason": "REAL-CROSS: symbolic fourier_transform helper, not baked in the subset" },
-  "inverse_fourier_transform": { "reason": "REAL-CROSS: symbolic inverse_fourier_transform helper, not baked in the subset" },
-  "_oo_dsolve": { "reason": "BRIDGE: private python-side dsolve bridge symbol (oo_pyexpr), resolved via wasm-python" },
-  "build": { "reason": "LOCAL: variable in oo_sym_call" }
+  "F": {
+    "reason": "LOCAL: function-handle/result variable in anova2/cdfplot/wblplot"
+  },
+  "stdnormal_cdf": {
+    "reason": "CORE-MISSING: octave stdnormal_cdf not in this build; dist_fun falls back to own implementation — verify call sites"
+  },
+  "srtcat": {
+    "reason": "REAL: looks like typo of strcat in bartlett_test/levene_test (package bug — confirm harmless)"
+  },
+  "R": {
+    "reason": "LOCAL: variable in betalike/wblplot"
+  },
+  "H": {
+    "reason": "LOCAL: variable in ecdf/monotone_smooth"
+  },
+  "value": {
+    "reason": "LOCAL: variable in kruskalwallis/oo_pyexpr"
+  },
+  "str": {
+    "reason": "LOCAL: variable in sym.m/dsolve"
+  },
+  "sympify": {
+    "reason": "BRIDGE: python-side sympify helper, resolved via wasm-python bridge"
+  },
+  "TABLE": {
+    "reason": "LOCAL: uppercase variable in anovan"
+  },
+  "x": {
+    "reason": "LOCAL: variable in anovan"
+  },
+  "Symbol": {
+    "reason": "LOCAL: variable in boxplot"
+  },
+  "character": {
+    "reason": "LOCAL: variable in boxplot"
+  },
+  "formalism": {
+    "reason": "LOCAL: variable in boxplot"
+  },
+  "xx": {
+    "reason": "LOCAL: variable in cdfplot/fitgmdist"
+  },
+  "yy": {
+    "reason": "LOCAL: variable in cdfplot/fitgmdist"
+  },
+  "usage": {
+    "reason": "LOCAL: variable in cmdscale"
+  },
+  "nll": {
+    "reason": "LOCAL: variable in gevlike"
+  },
+  "p": {
+    "reason": "LOCAL: variable in normfit"
+  },
+  "q": {
+    "reason": "LOCAL: variable in normfit"
+  },
+  "lb": {
+    "reason": "LOCAL: variable in poissfit"
+  },
+  "paramhatEV": {
+    "reason": "LOCAL: variable in wblfit"
+  },
+  "paramciEV": {
+    "reason": "LOCAL: variable in wblfit"
+  },
+  "strcar": {
+    "reason": "LOCAL/typo-guard: single occurrence in copulacdf"
+  },
+  "strcaty": {
+    "reason": "LOCAL/typo-guard: single occurrence in copularnd"
+  },
+  "stdnormal_pdf": {
+    "reason": "CORE-MISSING: octave stdnormal_pdf not in this build — verify call sites in jsupdf"
+  },
+  "u": {
+    "reason": "LOCAL: variable in vmrnd"
+  },
+  "exists": {
+    "reason": "LOCAL: variable in fitgmdist"
+  },
+  "gl_s": {
+    "reason": "LOCAL: variable in grp2idx"
+  },
+  "xbin": {
+    "reason": "LOCAL: variable in histfit"
+  },
+  "xr": {
+    "reason": "LOCAL: variable in kruskalwallis"
+  },
+  "ps": {
+    "reason": "LOCAL: variable in multcompare"
+  },
+  "U": {
+    "reason": "LOCAL: variable in pcacov"
+  },
+  "V": {
+    "reason": "LOCAL: variable in pcares"
+  },
+  "p_val": {
+    "reason": "LOCAL: variable in ranksum"
+  },
+  "r1testN": {
+    "reason": "LOCAL: variable in sampsizepwr"
+  },
+  "b_j": {
+    "reason": "LOCAL: variable in stepwisefit"
+  },
+  "bint_j": {
+    "reason": "LOCAL: variable in stepwisefit"
+  },
+  "b_new": {
+    "reason": "LOCAL: variable in stepwisefit"
+  },
+  "bint_new": {
+    "reason": "LOCAL: variable in stepwisefit"
+  },
+  "count": {
+    "reason": "LOCAL: variable in tabulate"
+  },
+  "sx": {
+    "reason": "LOCAL: variable in tiedrank"
+  },
+  "x_var": {
+    "reason": "LOCAL: variable in vartest2"
+  },
+  "y_var": {
+    "reason": "LOCAL: variable in vartest2"
+  },
+  "group_mean": {
+    "reason": "LOCAL: variable in vartestn"
+  },
+  "statistic": {
+    "reason": "LOCAL: variable in vartestn"
+  },
+  "group_size": {
+    "reason": "LOCAL: variable in vartestn"
+  },
+  "nelder_mead_min": {
+    "reason": "REAL-CROSS-FIXED: regdatasmooth.m default-optimizer dep. Dockerfile now ships pure-.m nelder_mead_min into the baked data-smoothing-forge tree; verified in-browser (which resolves, default GCV path returns 101 finite pts). Entry stays until the next octave-wasm rebuild publishes the file (then reclassifies BAKED and can be dropped)."
+  },
+  "provided": {
+    "reason": "LOCAL: variable in rgdtsmcore"
+  },
+  "integrate": {
+    "reason": "REAL-CROSS: @sym/integrate method, not baked in the symbolic subset"
+  },
+  "inverse_laplace_transform": {
+    "reason": "REAL-CROSS: symbolic inverse_laplace_transform helper, not baked in the subset"
+  },
+  "inverse_fourier_transform": {
+    "reason": "REAL-CROSS: symbolic inverse_fourier_transform helper, not baked in the subset"
+  },
+  "_oo_dsolve": {
+    "reason": "BRIDGE: private python-side dsolve bridge symbol (oo_pyexpr), resolved via wasm-python"
+  }
 }
