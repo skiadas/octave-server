@@ -6,7 +6,7 @@ PoC milestones for Route G. Each gate has a crisp pass/fail criterion.
 
 | # | Milestone | Exit criterion |
 |---|---|---|
-| M0 | Repo + docs scaffold | README + architecture + build + roadmap committed; vendors pinned as submodules |
+| M0 | Repo + docs scaffold | README + architecture + build + roadmap committed; octave base frozen on GHCR, gnuplot source vendored |
 | M1 | octave-wasm builds & runs | `octave.wasm` loads in browser; interpreter evaluates `1+1` and `rand(3,3)` |
 | M2 | gnuplot-wasm builds & renders | `gnuplot('plot x**2;', …)` returns a non-empty SVG in browser |
 | M3 | Integration pipeline | `plot`/`surf`/`hist`/`imshow` produce correct-looking SVG in the app's plot panel |

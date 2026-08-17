@@ -1,0 +1,64 @@
+name: Rebuild base image
+
+# One-shot, manually-triggered recompile of the frozen octave base
+# (GNU Octave 7.2.0 -> wasm). Rebuilds rwl/octave-wasm from upstream at the
+# pinned commit, then publishes the image back to GHCR so that deploy.yml's
+# FROM <digest> can be bumped.
+#
+# Required repo secret: GHCR_PAT = a PAT with write:packages, scoped to the
+# GitHub account that owns the package (ghcr.io/skiadas/octave-base) -- the
+# default GITHUB_TOKEN can only push repo-scoped packages.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Tag of the new base image (e.g. '7.2.0-2')
+        required: true
+        default: 7.2.0-2
+        type: string
+      upstream_commit:
+        description: rwl/octave-wasm commit to build from
+        required: false
+        default: e584306c715e869448f32bb3c0dc395b89a4846d
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail early if GHCR_PAT secret is missing
+        if: ${{ secrets.GHCR_PAT == '' }}
+        run: |
+          echo "::error::Missing repo secret GHCR_PAT (PAT with write:packages for ghcr.io/skiadas/octave-base)."
+          exit 1
+
+      - name: Clone upstream rwl/octave-wasm at pinned commit
+        run: |
+          git clone -n https://github.com/rwl/octave-wasm.git /tmp/octave-wasm
+          git -C /tmp/octave-wasm checkout "${{ inputs.upstream_commit }}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Build and push base (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: /tmp/octave-wasm
+          file: /tmp/octave-wasm/Dockerfile
+          target: builder
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/skiadas/octave-base:${{ inputs.version }}

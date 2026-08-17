@@ -21,7 +21,7 @@ a polished shell. These are deliberately left open.
 
 | Component | Origin | Role |
 |---|---|---|
-| `octave.wasm` | `rwl/octave-wasm` (Octave 7.2.0, Emscripten) | Interpreter + numeric core + graphics object model |
+| `octave.wasm` | our frozen rebuild of `rwl/octave-wasm` (Octave 7.2.0, Emscripten) on `ghcr.io/skiadas/octave-base` | Interpreter + numeric core + graphics object model |
 | `gnuplot.wasm` | `Eumeryx/gnuplot-wasm` (gnuplot 5.4.10, Emscripten) | SVG renderer; consumes gnuplot scripts |
 | Pyodide/SymPy | JsDelivr CDN (v314.0.4, pinned) | In-browser Python + SymPy for the symbolic shim |
 | App shell (`app/`) | ours | Console, plot panel, worker orchestration |
@@ -146,7 +146,9 @@ The two wasm modules never call each other; JS is the only glue.
 
 ### Layer 3 — Build
 
-- octave-wasm: Docker build (from `vendor/octave-wasm`, `make build`).
+- octave-wasm: Docker stage-2 relink FROM the frozen GHCR base
+  (`ghcr.io/skiadas/octave-base@sha256:0407…`, see `docs/build.md`); the base
+  itself is recompiled rarely via the manual `rebuild-base` workflow.
 - gnuplot-wasm: Docker build using an Emscripten SDK image + `build.sh`
   (no local emcc install needed).
 - App: static assets only (no framework commitment in the PoC).

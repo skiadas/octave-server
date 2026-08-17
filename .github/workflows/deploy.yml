@@ -1,0 +1,93 @@
+name: Deploy
+
+# Auto-deploy the PoC to GitHub Pages on every push to main.
+# No post-deploy live gate: the octave-wasm / gnuplot-wasm builds act as the
+# gate (a broken build fails here before anything is published).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # gnuplot-wasm (fast: emsdk pull + compile).
+      - name: Build gnuplot-wasm
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: scripts/gnuplot-wasm.Dockerfile
+          platforms: linux/amd64
+          tags: oo-gnuplot-wasm:latest
+          load: true
+          cache-from: type=gha,scope=gnuplot
+          cache-to: type=gha,mode=max,scope=gnuplot
+
+      # octave-wasm (patched relink FROM the frozen GHCR base, pulled by
+      # digest from scripts/octave-wasm.Dockerfile). ~5-15 min on first run,
+      # layer-cached afterwards.
+      - name: Build octave-wasm
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: scripts/octave-wasm.Dockerfile
+          platforms: linux/amd64
+          tags: oo-octave-wasm:latest
+          load: true
+          cache-from: type=gha,scope=octave
+          cache-to: type=gha,mode=max,scope=octave
+
+      - name: Extract gnuplot artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p site/dist/gnuplot-wasm
+          docker create --name gp oo-gnuplot-wasm:latest
+          docker cp gp:/src/dist/. site/dist/gnuplot-wasm/
+          docker rm gp >/dev/null
+
+      - name: Extract octave artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p site/dist/octave-wasm
+          docker create --name oc oo-octave-wasm:latest
+          docker cp oc:/usr/src/octave-wasm/src/web/. site/dist/octave-wasm/
+          docker rm oc >/dev/null
+
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          cp -r app site/app
+          touch site/.nojekyll
+          cat > site/index.html <<'EOF'
+          <!DOCTYPE html>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=./app/">
+          <title>octave-server</title>
+          <p><a href="./app/">octave-server</a></p>
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -4,13 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLATFORM="${PLATFORM:-linux/amd64}"
 
-echo "[octave-wasm] stage 1/2: base image (vendor Makefile build) ..."
-docker build --platform "$PLATFORM" --progress=plain \
-  --target builder \
-  -t ghcr.io/rwl/octave-wasm:latest \
-  "$ROOT/vendor/octave-wasm"
-
-echo "[octave-wasm] stage 2/2: patched web build ..."
+# The frozen base (FROM ... @sha256) is pulled automatically by the build
+# below; see rebuild-base.yml if you need to recompile Octave itself.
+echo "[octave-wasm] patched web build (FROM frozen ghcr/skiadas/octave-base) ..."
 docker build --platform "$PLATFORM" --progress=plain \
   -f "$ROOT/scripts/octave-wasm.Dockerfile" \
   -t oo-octave-wasm:latest \

@@ -7,19 +7,24 @@ All wasm artifacts are built inside Docker. **The host is Apple Silicon, and
 ## Prerequisites
 
 - Docker (with qemu emulation for amd64 — default on Docker Desktop)
-- Network access to GitHub, SourceForge, Docker Hub, Google Storage
+- Network access to GHCR, GitHub, SourceForge, Docker Hub
 
 ## 1. octave-wasm (GNU Octave 7.2.0 → wasm)
 
-Two stages:
+Two stages — only the second runs locally:
 
-- **Stage 1 (base):** upstream `rwl/octave-wasm` `builder` image. Long:
-  compiles LAPACK/SuiteSparse/Octave with emscripten (~30–90 min, cached
-  afterwards).
-- **Stage 2 (patched):** our `scripts/octave-wasm.Dockerfile` re-links the
-  `web` target with all m-file categories preloaded, the Octave Forge
-  `statistics` and `data-smoothing` packages baked in, our symbolic shim
-  tree copied in, and our gnuplot-toolkit patches applied. Fast (relink only).
+- **Stage 1 (base — prebuilt & frozen):** Octave 7.2.0 compiled to wasm once
+  and published to GHCR as `ghcr.io/skiadas/octave-base:7.2.0-1`
+  (`sha256:0407d594a312…`). The build references it **by digest**, so
+  relinks never depend on upstream `rwl/octave-wasm`. To recompile the base
+  from source (rare; 30–90 min), run the **manual** `rebuild-base` workflow:
+  it clones `rwl/octave-wasm` at the pinned commit `e584306c`, builds, tags
+  `:7.2.0-<n>`, and pushes it back to GHCR.
+- **Stage 2 (patched):** our `scripts/octave-wasm.Dockerfile` starts FROM the
+  frozen base, then re-links the `web` target with all m-file categories
+  preloaded, the Octave Forge `statistics` and `data-smoothing` packages
+  baked in, our symbolic shim tree copied in, and our gnuplot-toolkit patches
+  applied. Fast (relink only, ~5–15 min).
 
 Outputs (extracted to `dist/octave-wasm/`): `octave.js`, `octave.wasm`,
 `octave.data`.
@@ -53,9 +58,9 @@ subdirs, so those are available without a `pkg load` step.
 
 ## 2. gnuplot-wasm (gnuplot 5.4.10 → wasm)
 
-`scripts/gnuplot-wasm.Dockerfile` builds `Eumeryx/gnuplot-wasm` on
-`emscripten/emsdk:3.1.24` with our stdin-fed wrapper
-(`scripts/gnuplot-wasm/pre.js`) overriding the upstream one.
+`scripts/gnuplot-wasm.Dockerfile` builds the vendored `Eumeryx/gnuplot-wasm`
+source (`vendor/gnuplot-wasm`) on `emscripten/emsdk:3.1.24` with our
+stdin-fed wrapper `scripts/gnuplot-wasm/pre.js` overriding the upstream one.
 
 **Why the wrapper override matters:** Octave's toolkit emits plot data inline
 via `plot "-"` (data lines + `e`) in the same stream as the commands. Upstream

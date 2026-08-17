@@ -6,7 +6,11 @@
 #
 #   docker build --platform linux/amd64 -f scripts/octave-wasm.Dockerfile \
 #     -t oo-octave-wasm:latest .
-FROM ghcr.io/rwl/octave-wasm:latest
+# Our frozen copy of <where>/octave-wasm's builder stage, published once to
+# GHCR and referenced by digest so rebuilds never depend on upstream.
+# Redecompile the base on demand via .github/workflows/rebuild-base.yml
+# (clones rwl/octave-wasm @ e584306c715e869448f32bb3c0dc395b89a4846d).
+FROM ghcr.io/skiadas/octave-base@sha256:0407d594a312050dc4dc8ca423b3ff5b6f8432cceba5d98a417281a10d03c5cd
 
 # Octave Forge "statistics" 1.6.0 (the last release supporting core 7.2.0;
 # 1.7.x needs Octave >= 8).  Only the pure-.m inst/ tree is shipped: the src/

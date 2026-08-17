@@ -44,8 +44,8 @@ verification gates.
 │   └── verification.md   # gate results (M4)
 ├── app/                  # minimal PoC web app (console + inline plots)
 ├── vendor/
-│   ├── octave-wasm/      # git submodule: GNU Octave → wasm (rwl/octave-wasm)
-│   └── gnuplot-wasm/     # git submodule: gnuplot → wasm (Eumeryx/gnuplot-wasm)
+│   └── gnuplot-wasm/     # vendored gnuplot → wasm source (Eumeryx/gnuplot-wasm)
+│                         # octave base is frozen on GHCR: ghcr.io/skiadas/octave-base
 └── patches/              # our patches applied on top of vendored sources
 ```
 
