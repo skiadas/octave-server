@@ -9,6 +9,9 @@ name: Rebuild base image
 # GitHub account that owns the package (ghcr.io/skiadas/octave-base) -- the
 # default GITHUB_TOKEN can only push repo-scoped packages.
 
+env:
+  GHCR_PAT: ${{ secrets.GHCR_PAT }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -33,10 +36,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Fail early if GHCR_PAT secret is missing
-        if: ${{ secrets.GHCR_PAT == '' }}
         run: |
-          echo "::error::Missing repo secret GHCR_PAT (PAT with write:packages for ghcr.io/skiadas/octave-base)."
-          exit 1
+          if [ -z "$GHCR_PAT" ]; then
+            echo "::error::Missing repo secret GHCR_PAT (PAT with write:packages for ghcr.io/skiadas/octave-base)."
+            exit 1
+          fi
 
       - name: Clone upstream rwl/octave-wasm at pinned commit
         run: |
