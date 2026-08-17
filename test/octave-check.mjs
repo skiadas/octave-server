@@ -10,6 +10,7 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const APP_URL = `http://127.0.0.1:${PORT}/app/`;
 
 let server;
+let browser;
 function startServer() {
   return new Promise((resolve) => {
     server = spawn('python3', ['-m', 'http.server', String(PORT)], { cwd: ROOT });
@@ -25,7 +26,7 @@ function check(name, ok, detail) {
 
 async function main() {
   await startServer();
-  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true });
+  browser = await puppeteer.launch({ executablePath: CHROME, headless: true });
   const page = await browser.newPage();
   page.on('pageerror', (e) => console.error('[pageerror]', e.message));
 
@@ -113,6 +114,7 @@ async function main() {
 
 main().catch(async (err) => {
   console.error(err.message || err);
+  if (browser) { try { await browser.close(); } catch (e) {} }
   if (server) server.kill();
   process.exit(2);
 });

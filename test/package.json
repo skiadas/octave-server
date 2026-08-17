@@ -3,8 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:ui": "node ui-unit.mjs",
+    "test:smoke": "node ui-smoke.mjs",
     "verify": "node verify.mjs",
-    "verify:gnuplot": "node gnuplot-node.mjs"
+    "verify:fast": "SKIP_SLOW=1 node verify.mjs",
+    "verify:gnuplot": "node gnuplot-node.mjs",
+    "audit:deps": "node package-deps.mjs",
+    "audit:deps:update": "node package-deps.mjs --update-allowlist",
+    "audit:triage": "node package-deps.mjs --triage-src"
   },
   "dependencies": {
     "puppeteer-core": "^23.11.1"
