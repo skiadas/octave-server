@@ -43,6 +43,15 @@ function dataUriToBytes(uri) {
   return bytes.buffer;
 }
 
+/* Runtime fetches (octave.data / octave.wasm / gnuplot.wasm) are versioned
+   with the ?v=<hash> baked into window.__OO_V__ by scripts/build.mjs so a
+   browser cache can never replay stale wasm/data against a new build. */
+function assetURL(path) {
+  const v = (typeof window !== 'undefined' && window.__OO_V__) || {};
+  const h = v[path];
+  return h ? '../dist/' + path + '?v=' + h : '../dist/' + path;
+}
+
 /* gnuplot can render only once per module instance; cache the wasm bytes
    and instantiate a fresh module for every plot. */
 function getGnuplotWasm() {
@@ -50,7 +59,7 @@ function getGnuplotWasm() {
     const uri = embeddedDataUri('gnuplot.wasm');
     gnuplotWasmPromise = uri
       ? Promise.resolve(dataUriToBytes(uri))
-      : fetch('../dist/gnuplot-wasm/gnuplot.wasm').then((r) => r.arrayBuffer());
+      : fetch(assetURL('gnuplot-wasm/gnuplot.wasm')).then((r) => r.arrayBuffer());
   }
   return gnuplotWasmPromise;
 }
@@ -119,7 +128,7 @@ if (typeof OCTAVE !== 'function') {
       // Single-file build: return the embedded data URI when present.
       const uri = embeddedDataUri('octave-wasm/' + path) || embeddedDataUri(path);
       if (uri) return uri;
-      return '../dist/octave-wasm/' + path;
+      return assetURL('octave-wasm/' + path);
     },
     print: function (text) { append(escapeHtml(String(text)) + '\n'); },
     printErr: function (text) {

@@ -108,11 +108,18 @@ npm run serve      # http://localhost:8080/app/
 
 | Profile | Output | Use |
 |---|---|---|
-| `dist` | `dist/app/app.js` (~35 KB) | loaded by `app/index.html` next to the wasm loader scripts; served over HTTP |
+| `dist` | `dist/app/app.js` (~35 KB) + `dist/app/index.html` | the page the deploy serves: `app/index.html` copied with `?v=<hash>` on every local asset URL and a `window.__OO_V__` block, so a browser cache can never replay stale wasm/data against a new build |
 | `single` | `dist/single/index.html` (~37 MB) | self-contained — inlines the bundle **and** both wasm binaries as base64, so it runs from `file://` with no server |
 
 `dist/` is gitignored; the CI build step regenerates both before the test gate
 and deploys the `dist/` profile's `app/` + `dist/` wasm outputs to Pages.
+
+`npm run serve` runs `scripts/serve.sh`, which uses `scripts/serve.py` (not
+plain `python3 -m http.server`): the handler sends `Cache-Control: no-store`,
+otherwise Chrome heuristically caches the ~10 MB `octave.data` on localhost and
+replays stale builds (garbled m-file parse errors on boot). Use it for local
+dev; hard-refresh guidance still applies on the deployed site, where Pages
+serves assets with short `max-age` + ETag revalidation.
 
 Loads `app/index.html` which wires both wasm modules together. Try:
 `plot(sin(0:0.1:10))`, `hist(randn(1000,1), 30)`, `surf(peaks(30))`,

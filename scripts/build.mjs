@@ -6,7 +6,9 @@
    dist   → dist/app/app.js  (a single classic IIFE script, esbuild-bundled)
             consumed by app/index.html together with the vendored wasm loader
             scripts (octave.js / gnuplot.js) and the Pyodide CDN script. This
-            is what GitHub Pages serves.
+            is what GitHub Pages serves, via dist/app/index.html — a generated
+            copy of the page with ?v=<hash> on every local asset URL and a
+            window.__OO_V__ block (see buildDistIndex).
 
    single → dist/single/index.html : a fully self-contained single file that
             runs from file:// with no web server. Everything is inlined: the
@@ -19,6 +21,7 @@
 */
 
 import { build } from 'esbuild';
+import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -45,6 +48,51 @@ async function bundleApp() {
     logLevel: 'info',
   });
   return outfile;
+}
+
+/* SHA-256 short hash of a file's bytes, used for ?v= cache-busting. */
+async function fileHash(rel) {
+  const b = await readFile(path.join(DIST_DIR, rel));
+  return createHash('sha256').update(b).digest('hex').slice(0, 12);
+}
+
+/* Emit dist/app/index.html: a copy of the page whose local <script> URLs and
+   the wasm fetches (via window.__OO_V__, consumed by main.js assetURL) carry
+   ?v=<hash>. Content-addressed, so unchanged bytes reuse the URL and any real
+   change busts the browser cache. Cross-deploy staleness -- which previously
+   replayed old octave.data against a new loader -- becomes impossible. */
+async function buildDistIndex(appBundleRel) {
+  const html = await readFile(path.join(APP_DIR, 'index.html'), 'utf8');
+  const gnuplotJs = await fileHash('gnuplot-wasm/gnuplot.js');
+  const octaveJs = await fileHash('octave-wasm/octave.js');
+  const appJs = await fileHash(appBundleRel);
+  const vart = {
+    'gnuplot-wasm/gnuplot.wasm': await fileHash('gnuplot-wasm/gnuplot.wasm'),
+    'octave-wasm/octave.wasm': await fileHash('octave-wasm/octave.wasm'),
+    'octave-wasm/octave.data': await fileHash('octave-wasm/octave.data'),
+  };
+  const script = Object.entries(vart).map(
+    ([key, v]) => '    ' + JSON.stringify(key) + ': ' + JSON.stringify(v)
+  ).join(',\n');
+  const withV = (f) => f + '?v=' + (f === '../dist/gnuplot-wasm/gnuplot.js' ? gnuplotJs
+    : f === '../dist/octave-wasm/octave.js' ? octaveJs : appJs);
+  const out = html
+    .replace(
+      '<script src="../dist/gnuplot-wasm/gnuplot.js"></script>',
+      '<script src="' + withV('../dist/gnuplot-wasm/gnuplot.js') + '"></script>'
+    )
+    .replace(
+      '<script src="../dist/octave-wasm/octave.js"></script>',
+      '<script src="' + withV('../dist/octave-wasm/octave.js') + '"></script>'
+    )
+    .replace(
+      '<script src="../dist/app/app.js"></script>',
+      '<script>window.__OO_V__ = {\n' + script + '\n};\n</script>\n' +
+      '<script src="' + withV('../dist/app/app.js') + '"></script>'
+    );
+  const outFile = path.join(DIST_DIR, 'app', 'index.html');
+  await writeFile(outFile, out);
+  console.log('dist →', path.relative(ROOT, outFile));
 }
 
 function b64(file) {
@@ -109,6 +157,7 @@ async function main() {
   await ensureDistDirs();
   if (profile === 'dist' || profile === 'both') {
     const out = await bundleApp();
+    await buildDistIndex(path.relative(DIST_DIR, out));
     console.log('dist →', path.relative(ROOT, out));
   }
   if (profile === 'single' || profile === 'both') {

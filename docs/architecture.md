@@ -233,7 +233,9 @@ immediately (`load`/`run`/`csvread`/`imread`).
 - App: ES modules under `app/` (`main.js` entry) bundled with **esbuild**
   (root `package.json`, `npm run build`). Two profiles in
   `scripts/build.mjs`: `dist` → `dist/app/app.js` (small; loaded by
-  `app/index.html` next to the wasm loader scripts, over HTTP) and `single`
+  `app/index.html` next to the wasm loader scripts, over HTTP; the deployed
+  page is `dist/app/index.html`, a generated copy whose asset URLs carry
+  `?v=<hash>` — see `docs/build.md`) and `single`
   → `dist/single/index.html` (a single self-contained HTML that inlines the
   bundle *and* the wasm binaries as base64 so the app runs straight from
   `file://` without a server). `dist/` is gitignored; CI builds it before

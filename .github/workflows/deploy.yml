@@ -70,6 +70,8 @@ jobs:
           docker rm oc >/dev/null
 
       # Bundle the app (esbuild, from app/ ES modules) into site/dist/app/app.js.
+      # build:dist also derives dist/app/index.html with ?v=<hash> asset URLs, so
+      # first mirror the extracted wasm artifacts into repo dist/ for hashing.
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
@@ -78,6 +80,9 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Bundle app
         run: |
+          mkdir -p dist
+          cp -r site/dist/gnuplot-wasm dist/gnuplot-wasm
+          cp -r site/dist/octave-wasm dist/octave-wasm
           npm ci
           npm run build:dist
 
@@ -86,6 +91,8 @@ jobs:
           set -euo pipefail
           mkdir -p site
           cp -r app site/app
+          # Serve the generated (cache-busted) page, not the source index.html.
+          cp -r dist/app/index.html site/app/index.html
           cp -r dist/app site/dist/app
           touch site/.nojekyll
           cat > site/index.html <<'EOF'

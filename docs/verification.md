@@ -1,6 +1,6 @@
 # Verification
 
-Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles); per-figure plot pipeline live: each figure renders to its own `/plot-fig-*.gp` stream (truncated on redraw), JS renders every changed figure into run-grouped gallery entries with a one-SVG viewer (◀ i / N ▶); file panel hardened with an icon toolbar + clickable breadcrumb target bar + up-to-parent; render battery `verify:fast` 10/10 green; UI unit 35/35, smoke 5/5, single-file 3/3 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green.**
+Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles); per-figure plot pipeline live: each figure renders to its own `/plot-fig-*.gp` stream (truncated on redraw), JS renders every changed figure into run-grouped gallery entries with a one-SVG viewer (◀ i / N ▶); file panel hardened with an icon toolbar + clickable breadcrumb target bar + up-to-parent; cache-busting live: `dist/app/index.html` generated with `?v=<hash>` asset URLs + `window.__OO_V__` consumed by `main.js` `locateFile`, and `scripts/serve.py` sends `Cache-Control: no-store` so stale wasm/data can never replay; render battery `verify:fast` 10/10 green; UI unit 35/35, smoke 5/5, single-file 3/3 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green.**
 
 ## Gates
 
