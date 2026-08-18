@@ -52,7 +52,8 @@ The patches live in `patches/`:
 | `octave-src/oo-toolkit.cc` | registers the `gnuplot` graphics toolkit directly (no dlopen/gnuplot-binary needed) |
 | `octave-src/wasm-python.cc` | `DEFUN (__wasm_python__)` bridge: evaluates SymPy code in the host page's Pyodide runtime and returns a string (EM_JS → `window.__ooWasmPython`) |
 | `octave-wasm.Dockerfile` | pinned downloads + sha256: **Octave Forge `statistics` 1.6.0** (last release requiring `octave >= 7.2.0`; pure-`.m` `inst/` tree only — its `src/` is libsvm `.oct`, not wasm-loadable) and **`data-smoothing` 1.3.0** (pure `.m`); also `COPY`s our `symbolic-sympy` shim tree |
-| `octave-m/.../__gnuplot_open_stream__.m` | writes the gnuplot stream to `/plot.gp` instead of `popen()` |
+| `octave-m/.../__gnuplot_open_stream__.m` | writes the gnuplot stream to **one file per figure** (`/plot-fig-<handle>.gp`, truncating on open) instead of `popen()`; `/plot.gp` is only the no-handle fallback |
+| `octave-m/.../__gnuplot_drawnow__.m` | display branch always opens a fresh stream, so each draw truncates that figure's file (clean single block, no cross-figure clobbering, no accumulation) |
 | `octave-m/.../__gnuplot_version__.m` | reports `5.4.10` without executing gnuplot |
 | `octave-m/.../__gnuplot_has_terminal__.m` | reports any terminal as available |
 | `octave-m/.../__gnuplot_get_var__.m` | reports `GPVAL_TERM = svg` without querying a live gnuplot |

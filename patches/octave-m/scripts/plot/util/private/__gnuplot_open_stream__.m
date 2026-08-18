@@ -32,15 +32,24 @@
 ## --------------------
 ## In the browser there is no way to spawn a gnuplot subprocess (no
 ## popen/popen2).  This override redirects the gnuplot toolkit's output
-## stream to a file in the Emscripten virtual filesystem (/plot.gp).
-## The JS layer reads that file after each drawnow and renders it with
-## gnuplot-wasm, then displays the resulting SVG.
+## stream to a file (or files) in the Emscripten virtual filesystem.
+##
+## Each figure renders to its own file (/plot-fig-<handle>.gp), opened for
+## write so a redraw replaces that figure's file instead of appending to it.
+## Because the JS layer scans /plot-fig-*.gp after every eval and renders each
+## figure independently, multi-figure scripts keep every figure instead of
+## clobbering a single /plot.gp (the old behavior).  /plot.gp remains only as
+## a fallback for stream opens without a figure handle.
 
 function plot_stream = __gnuplot_open_stream__ (npipes, h)
 
-  plot_stream = fopen ("/plot.gp", "w");
+  if (nargin > 1 && ! isempty (h))
+    plot_stream = fopen (sprintf ("/plot-fig-%d.gp", h), "w");
+  else
+    plot_stream = fopen ("/plot.gp", "w");
+  endif
   if (plot_stream < 0)
-    error ("__gnuplot_open_stream__: failed to open /plot.gp");
+    error ("__gnuplot_open_stream__: failed to open plot stream file");
   endif
 
   if (nargin > 1)

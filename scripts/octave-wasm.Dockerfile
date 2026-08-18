@@ -56,6 +56,8 @@ COPY patches/octave-src/oo-toolkit.cc /usr/src/octave-wasm/src/oo-toolkit.cc
 COPY patches/octave-src/wasm-python.cc /usr/src/octave-wasm/src/wasm-python.cc
 COPY patches/octave-m/scripts/plot/util/private/__gnuplot_open_stream__.m \
      /usr/src/octave-wasm/target/share/octave/7.2.0/m/plot/util/private/__gnuplot_open_stream__.m
+COPY patches/octave-m/scripts/plot/util/__gnuplot_drawnow__.m \
+     /usr/src/octave-wasm/target/share/octave/7.2.0/m/plot/util/__gnuplot_drawnow__.m
 COPY patches/octave-m/scripts/plot/util/private/__gnuplot_version__.m \
      /usr/src/octave-wasm/target/share/octave/7.2.0/m/plot/util/private/__gnuplot_version__.m
 COPY patches/octave-m/scripts/plot/util/private/__gnuplot_has_terminal__.m \
