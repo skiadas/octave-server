@@ -69,11 +69,24 @@ jobs:
           docker cp oc:/usr/src/octave-wasm/src/web/. site/dist/octave-wasm/
           docker rm oc >/dev/null
 
+      # Bundle the app (esbuild, from app/ ES modules) into site/dist/app/app.js.
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Bundle app
+        run: |
+          npm ci
+          npm run build:dist
+
       - name: Assemble site
         run: |
           set -euo pipefail
           mkdir -p site
           cp -r app site/app
+          cp -r dist/app site/dist/app
           touch site/.nojekyll
           cat > site/index.html <<'EOF'
           <!DOCTYPE html>

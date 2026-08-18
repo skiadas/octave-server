@@ -1,0 +1,14 @@
+{
+  "name": "octave-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:dist": "node scripts/build.mjs --profile=dist",
+    "build:single": "node scripts/build.mjs --profile=single",
+    "serve": "bash scripts/serve.sh"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
