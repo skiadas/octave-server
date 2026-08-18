@@ -1,6 +1,6 @@
 # Verification
 
-Status: **in progress — M3 render battery renders all 11 cases (GPU-bound renders are slow under host load — handled by caps + per-case retry, not functional failures); `verify:fast` 9/9 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green 10/10.**
+Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles), file panel feature (selected-folder model, create file/folder inside a folder, per-folder upload) live; render battery `verify:fast` 9/9 green; UI unit 22/22, smoke 5/5, single-file 2/2 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green 10/10.**
 
 ## Gates
 
@@ -20,10 +20,13 @@ Status: **in progress — M3 render battery renders all 11 cases (GPU-bound rend
 ```bash
 scripts/build.sh          # build both wasm artifacts (only needed when they change)
 cd test && npm install     # once
-node ui-unit.mjs          # FAST tier: UI glue logic with stubbed runtime (<1 s, no Chrome)
-node ui-smoke.mjs         # FAST tier: real octave-wasm boot, non-plot cases only (~1-2 min)
+npm run build             # bundle app/ (must run before any browser-tier test)
+npm run test:ui           # FAST tier: UI glue logic with stubbed runtime (<1 s, no Chrome)
+npm run test:smoke        # FAST tier: real octave-wasm boot, non-plot cases only (~1-2 min)
+npm run check:single      # gate: dist/single/index.html evaluates over file://
 node octave-check.mjs     # Gates 1/1b/2 + plot smoke (one render)
-node verify.mjs           # Gates 3/4 battery in app/index.html (slow renders)
+npm run verify:fast       # Gates 3/4 battery (fast subset) in the bundled app
+npm run verify            # full render battery incl. CPU-bound mesh/surf/boxplot/imshow
 node symbolic-check.mjs   # Gate 1c/1d/1e + symbolic smoke (Puppeteer, needs network once for Pyodide/SymPy CDN)
 ```
 

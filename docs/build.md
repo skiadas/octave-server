@@ -94,9 +94,24 @@ scripts/build.sh gnuplot
 
 ## 4. Run the PoC app
 
+The app shell (`app/`) is plain ES modules; **esbuild** bundles them before
+serving.
+
 ```bash
-scripts/serve.sh        # http://localhost:8080/app/
+npm install        # once — root package.json (esbuild devDependency)
+npm run build      # bundles app/ → dist/app/app.js  (and dist/single/index.html)
+npm run serve      # http://localhost:8080/app/
 ```
+
+`npm run build` runs `scripts/build.mjs`, which produces two profiles:
+
+| Profile | Output | Use |
+|---|---|---|
+| `dist` | `dist/app/app.js` (~35 KB) | loaded by `app/index.html` next to the wasm loader scripts; served over HTTP |
+| `single` | `dist/single/index.html` (~37 MB) | self-contained — inlines the bundle **and** both wasm binaries as base64, so it runs from `file://` with no server |
+
+`dist/` is gitignored; the CI build step regenerates both before the test gate
+and deploys the `dist/` profile's `app/` + `dist/` wasm outputs to Pages.
 
 Loads `app/index.html` which wires both wasm modules together. Try:
 `plot(sin(0:0.1:10))`, `hist(randn(1000,1), 30)`, `surf(peaks(30))`,

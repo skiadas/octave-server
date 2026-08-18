@@ -179,23 +179,34 @@ immediately (`load`/`run`/`csvread`/`imread`).
   the app still works for the session (and the no-browser unit harness stays
   green).
 - **Bridge (`app/octfs.js`):** applies every op to the store **and** live
-  MEMFS under `ooApp.userPath` (`/home/user`); `hydrate()` replays the whole
-  store into MEMFS at boot and points Octave's cwd there via `cd` + `addpath`.
-  MEMFS writes are synchronous (so Octave sees files instantly); the IndexedDB
-  persist is async and returned as the promise.
+  MEMFS under the user root (exported from `runtime.js` as `userPath`,
+  default `/home/user`); `hydrate()` replays the whole store into MEMFS at
+  boot and points Octave's cwd there via `cd` + `addpath`. MEMFS writes are
+  synchronous (so Octave sees files instantly); the IndexedDB persist is
+  async and returned as the promise. Parent directories are created
+  idempotently via `FS.analyzePath` (Emscripten's `mkdir` on an existing dir
+  throws a generic `"FS error"` with no errno code — matching error text is
+  unreliable, existence checks are not).
 - **Panel (`app/filepanel.js`):** a collapsible file tree rendered from the
-  store, with new-folder, upload (picker + drag/drop), download, rename,
-  delete, refresh, and click-to-preview (image via blob URL, text/`.m` as
-  source). Mutations funnel through `ooApp.octfs` so store and MEMFS stay in
-  sync; it re-renders on the `fs:change` / `fs:hydrated` events.
+  store. A folder is *selected* by clicking its name (bar shows the target
+  `⟶ folder/`); bar actions **new folder / new file / upload / refresh** act
+  inside the target, `new file` opens the file in the editor (pre-filled
+  path, empty buffer, focused). Folder rows get hover actions `+file`, `+dir`,
+  `up` and are themselves drag-drop targets, so everything works at arbitrary
+  nesting depth. Also: upload (picker + drag/drop), download, rename, delete,
+  refresh, and click-to-preview (image via blob URL, text/`.m` as source).
+  Mutations funnel through `octfs` so store and MEMFS stay in sync; it
+  re-renders on the `fs:change` / `fs:hydrated` events.
 - **Gallery (`app/gallery.js`):** session-scoped plot history. Each rendered
   SVG is added from `main.js`; thumbnails support click-to-view, individual
   SVG/PNG download (PNG via canvas rasterization), per-item remove, and a
   clear-all. It never writes into `#plotPane` (which holds only the single
   current SVG).
-- **Shared (`app/util.js`):** the `window.ooApp` namespace (DOM helpers,
-  escaping, pub/sub, blob-download) that the above modules and `main.js`
-  share. Plain scripts, no build step.
+- **Shared (`app/util.js`) and runtime (`app/runtime.js`):** ES-module
+  helpers — DOM building (`el`), pub/sub (`emit`/`on`), blob download, HTML
+  escaping, and the wasm runtime handle (`Module`, `userPath`, `setReady`,
+  `setAppend`). The app shell is a set of ES modules (`main.js` entry point)
+  bundled by esbuild — see §Layer 3.
 
 ### Layer 3 — Build
 
@@ -204,7 +215,15 @@ immediately (`load`/`run`/`csvread`/`imread`).
   itself is recompiled rarely via the manual `rebuild-base` workflow.
 - gnuplot-wasm: Docker build using an Emscripten SDK image + `build.sh`
   (no local emcc install needed).
-- App: static assets only (no framework commitment in the PoC).
+- App: ES modules under `app/` (`main.js` entry) bundled with **esbuild**
+  (root `package.json`, `npm run build`). Two profiles in
+  `scripts/build.mjs`: `dist` → `dist/app/app.js` (small; loaded by
+  `app/index.html` next to the wasm loader scripts, over HTTP) and `single`
+  → `dist/single/index.html` (a single self-contained HTML that inlines the
+  bundle *and* the wasm binaries as base64 so the app runs straight from
+  `file://` without a server). `dist/` is gitignored; CI builds it before
+  the test gate. Tests import the real module graph directly (no bundle
+  needed for the fast tier).
 
 ## 5. Data flow / figure lifecycle
 

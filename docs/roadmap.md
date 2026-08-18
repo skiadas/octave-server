@@ -11,6 +11,8 @@ PoC milestones for Route G. Each gate has a crisp pass/fail criterion.
 | M2 | gnuplot-wasm builds & renders | `gnuplot('plot x**2;', …)` returns a non-empty SVG in browser |
 | M3 | Integration pipeline | `plot`/`surf`/`hist`/`imshow` produce correct-looking SVG in the app's plot panel |
 | M4 | Verification + verdict | Gates 1–4 documented; feasibility verdict written |
+| M4.1 | App modernization | `app/` refactored to ES modules; esbuild bundle (`dist/app`) + self-contained single-file build (`dist/single`); CI builds before the test gate; tests import the real module graph |
+| M4.2 | File-panel feature | selected-folder model (`⟶ folder/` target), create file (opens in editor) / folder / upload inside the target, per-folder hover actions + drag-drop at arbitrary nesting; covered by UI-unit cases |
 
 ## Verification gates (theory → evidence)
 
