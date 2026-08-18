@@ -57,6 +57,7 @@ function makeElement(id) {
 const ELEM_IDS = [
   'output', 'cmd', 'status', 'plotPane', 'editor', 'filename', 'runBtn',
   'filesPane', 'galleryPane', 'galleryList', 'galleryEmpty', 'galleryClearBtn',
+  'plotPrevBtn', 'plotNextBtn', 'plotCounter', 'plotTitle',
   'previewPane', 'previewTitle', 'previewImg', 'previewText', 'previewClose',
   'fileInput',
 ];
@@ -70,6 +71,7 @@ const document = {
     e.tagName = String(tag).toUpperCase();
     return e;
   },
+  createTextNode: (t) => ({ nodeType: 3, textContent: String(t) }),
   body: makeElement('body'),
 };
 
@@ -104,6 +106,17 @@ const state = {
       e.errno = 44;
       throw e;
     },
+    readdir(dir) {
+      // The per-figure render pipeline scans '/'; tests populate state.fs.figFiles.
+      if (dir === '/') return state.fs.figFiles.slice();
+      return [];
+    },
+    stat(path) {
+      return { mtime: new Date(state.fs.mtimeSeed + (++state.fs.mtimeTick)) };
+    },
+    figFiles: [],
+    mtimeSeed: 0,
+    mtimeTick: 0,
   },
 };
 
@@ -112,7 +125,8 @@ const state = {
    resolves, and which runs the one-time init). eval_string is driven by
    state.evalStatus so tests can simulate failures. */
 function OCTAVE(cfg) {
-  cfg.FS = { writeFile: state.fs.writeFile, readFile: state.fs.readFile };
+  cfg.FS = { writeFile: state.fs.writeFile, readFile: state.fs.readFile,
+             readdir: state.fs.readdir, stat: state.fs.stat };
   cfg.eval_string = (code) => state.evalStatus(code);
   cfg.last_error_message = () => state.lastErr;
   cfg.execute_interp = () => {};
@@ -142,6 +156,26 @@ let failures = 0;
 function check(name, ok, detail) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}: ${detail}`);
   if (!ok) failures = 1;
+}
+
+/* Text of a (possibly composite) fake element: an explicitly-set textContent
+   wins; otherwise walk children + raw innerHTML text like the real DOM. */
+function textOf(el) {
+  if (!el) return '';
+  if (el.nodeType === 3) return String(el.textContent);
+  if (el._textSet) return String(el._text);
+  let s = innerTextFrom(el._html || '');
+  for (const c of el.children || []) s += textOf(c);
+  return s;
+}
+
+/* Clickable breadcrumb segments inside the fs-target bar (./ , sub/, …). */
+function crumbTexts() {
+  const target = elements.filesPane.children[0].children[0];
+  if (!target || !target.children) return [];
+  return (target.children || [])
+    .filter((c) => c.tagName === 'BUTTON')
+    .map((c) => textOf(c));
 }
 
 check('app modules load & __oo exposed', !!oo, typeof oo);
@@ -219,12 +253,12 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   const { octfs } = await import('../app/octfs.js');
   const pane = elements.filesPane;
   const tick = (ms) => new Promise((r) => setTimeout(r, ms || 5));
-  const barBtn = (label) => pane.children[0].children.find((c) => c.tagName === 'BUTTON' && c.textContent === label);
+  const barBtn = (label) => pane.children[0].children.find((c) => c.tagName === 'BUTTON' && textOf(c) === label);
   const rowFor = (label) => pane.children[1].children.find((c) => c.children[1] && c.children[1].textContent === label);
   const storedPaths = async () => (await fsStore.list()).map((i) => i.path);
 
-  check('bar target starts at root', pane.children[0].children[0].textContent === '⟶ /',
-    pane.children[0].children[0].textContent);
+  check('bar target starts at root (breadcrumb ./)', JSON.stringify(crumbTexts()) === JSON.stringify(['./']),
+    JSON.stringify(crumbTexts()));
 
   globalThis.prompt = () => 'sub';
   barBtn('new folder').click();
@@ -236,8 +270,8 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   rowFor('sub').children[1].click(); // folder name click selects it
   await tick();
   check('clicking folder name selects it',
-    filepanel.selected === 'sub' && pane.children[0].children[0].textContent === '⟶ sub/',
-    `selected=${filepanel.selected}, target=${pane.children[0].children[0].textContent}`);
+    filepanel.selected === 'sub' && JSON.stringify(crumbTexts()) === JSON.stringify(['./', 'sub/']),
+    `selected=${filepanel.selected}, crumbs=${JSON.stringify(crumbTexts())}`);
   check('selected folder row marked .fs-selected',
     pane.children[1].children[0].className.indexOf('fs-selected') !== -1,
     pane.children[1].children[0].className);
@@ -262,7 +296,7 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   const fileRow = rowFor('x.m');
   check('nested rows rendered (file x.m visible under sub)',
     !!fileRow, fileRow ? fileRow.children[1].textContent : 'not found');
-  const delBtn = fileRow.children[2].children.find((c) => c.textContent === 'del');
+  const delBtn = fileRow.children[2].children.find((c) => c.getAttribute('aria-label') === 'del');
   globalThis.confirm = () => true;
   delBtn.click();
   await tick();
@@ -275,8 +309,8 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   fp2.setSelected('');
   await tick();
   check('setSelected("") resets target to root',
-    fp2.selected === '' && pane.children[0].children[0].textContent === '⟶ /',
-    `selected=${fp2.selected}, target=${pane.children[0].children[0].textContent}`);
+    fp2.selected === '' && JSON.stringify(crumbTexts()) === JSON.stringify(['./']),
+    `selected=${fp2.selected}, crumbs=${JSON.stringify(crumbTexts())}`);
 
   // Nested structure persists via the real store->octfs chain.
   await octfs.putFile('sub/inner/deep.m', 'deep=1;\n').then(async () => setImmediate && await tick());
@@ -287,6 +321,87 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   check('octfs+fsStore agree on nested path (MEMFS write)',
     state.writes['/home/user/sub/inner/deep.m'] === 'deep=1;\n',
     `memfs=${JSON.stringify(state.writes['/home/user/sub/inner/deep.m'])}`);
+}
+
+// ---- Phase D: breadcrumb/Up navigation + per-figure gallery/run viewer ----
+{
+  const { fsStore } = await import('../app/fsstore.js');
+  const { filepanel } = await import('../app/filepanel.js');
+  const { gallery } = await import('../app/gallery.js');
+  const pane = elements.filesPane;
+  const tick = (ms) => new Promise((r) => setTimeout(r, ms || 5));
+
+  // Breadcrumb segments jump to that folder; the "./" crumb returns to root.
+  filepanel.setSelected('sub/inner');
+  await tick();
+  check('selecting a deep folder builds ./ › sub/ › inner/ crumbs',
+    JSON.stringify(crumbTexts()) === JSON.stringify(['./', 'sub/', 'inner/']),
+    JSON.stringify(crumbTexts()));
+
+  const rootCrumb = pane.children[0].children[0].children.find(
+    (c) => c.tagName === 'BUTTON' && textOf(c) === './');
+  rootCrumb.click();
+  await tick();
+  check('clicking the ./ breadcrumb returns to root',
+    filepanel.selected === '' && JSON.stringify(crumbTexts()) === JSON.stringify(['./']),
+    `selected=${filepanel.selected}, crumbs=${JSON.stringify(crumbTexts())}`);
+
+  filepanel.setSelected('sub/inner');
+  await tick();
+  const upBtn = pane.children[0].children.find((c) => textOf(c) === '' && c.getAttribute('title') === 'Up to parent folder');
+  upBtn.click();
+  await tick();
+  check('up button moves to the parent folder',
+    filepanel.selected === 'sub' && JSON.stringify(crumbTexts()) === JSON.stringify(['./', 'sub/']),
+    `selected=${filepanel.selected}, crumbs=${JSON.stringify(crumbTexts())}`);
+
+  // Per-figure rendering: one plotted figure -> one gallery entry in Run 1;
+  // re-running it adds a fresh entry under Run 2 (history kept, grouped).
+  gallery.clear();
+  state.fs.mtimeSeed = 0;
+  state.fs.figFiles = ['plot-fig-1.gp'];
+  state.fs.writeFile('/plot-fig-1.gp', 'set term svg;\nplot x;\n');
+  oo.run('figure(1); plot(1:2);');
+  await oo.awaitRender();
+  check('single plotted figure produces one gallery entry',
+    gallery.count() === 1 && gallery.runsCount() === 1,
+    `count=${gallery.count()} runs=${gallery.runsCount()}`);
+  check('viewer shows the figure + counter (1 / 1)',
+    elements.plotCounter.textContent === '1 / 1' && elements.plotTitle.textContent === 'Fig 1',
+    `counter=${JSON.stringify(elements.plotCounter.textContent)} title=${JSON.stringify(elements.plotTitle.textContent)}`);
+
+  oo.run('figure(1); plot(1:2);');
+  await oo.awaitRender();
+  check('re-running the figure keeps history in a new run group',
+    gallery.count() === 2 && gallery.runsCount() === 2,
+    `count=${gallery.count()} runs=${gallery.runsCount()}`);
+
+  // Two figures in one run land in the same group, viewer navigates.
+  gallery.clear();
+  state.fs.mtimeSeed = 0;
+  state.fs.figFiles = ['plot-fig-1.gp', 'plot-fig-2.gp'];
+  state.fs.writeFile('/plot-fig-1.gp', 'set term svg;\nplot x;\n');
+  state.fs.writeFile('/plot-fig-2.gp', 'set term svg;\nplot y;\n');
+  oo.run('figure(1); plot(1:2); figure(2); plot(2:3);');
+  await oo.awaitRender();
+  check('two figures in one run -> two entries in one group',
+    gallery.count() === 2 && gallery.runsCount() === 1,
+    `count=${gallery.count()} runs=${gallery.runsCount()}`);
+  check('viewer lands on the newest figure (2 / 2)',
+    elements.plotCounter.textContent === '2 / 2' && elements.plotTitle.textContent === 'Fig 2',
+    `counter=${JSON.stringify(elements.plotCounter.textContent)} title=${JSON.stringify(elements.plotTitle.textContent)}`);
+
+  elements.plotPrevBtn.click();
+  check('prev button navigates back to Fig 1 (1 / 2)',
+    gallery.index() === 0 && elements.plotCounter.textContent === '1 / 2',
+    `index=${gallery.index()} counter=${JSON.stringify(elements.plotCounter.textContent)}`);
+
+  elements.plotNextBtn.click();
+  check('next button returns to Fig 2 (2 / 2)',
+    gallery.index() === 1 && elements.plotCounter.textContent === '2 / 2',
+    `index=${gallery.index()} counter=${JSON.stringify(elements.plotCounter.textContent)}`);
+
+  state.fs.figFiles = [];
 }
 
 console.log(failures ? '\nUI unit tests: FAILED' : '\nUI unit tests: all passed');

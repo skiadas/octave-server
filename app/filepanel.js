@@ -263,10 +263,71 @@ function addAction(parent, label, fn) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'fs-btn';
-  b.textContent = label;
   b.title = label;
+  b.setAttribute('aria-label', label);
+  b.appendChild(icon(ACTION_ICONS[label] || 'file'));
   b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); });
   parent.appendChild(b);
+}
+
+/* Icons live as zero-dependency SVG <symbol> defs in index.html; this helper
+   renders a <use> reference for one. */
+const ACTION_ICONS = {
+  open: 'eye', dl: 'download', '+file': 'file-plus', '+dir': 'folder-plus',
+  up: 'upload', ren: 'pencil', del: 'trash', 'new folder': 'folder-plus',
+  'new file': 'file-plus', upload: 'upload', refresh: 'refresh', root: 'root', updir: 'up',
+};
+function icon(name) {
+  const s = document.createElement('span');
+  s.className = 'fs-ic';
+  s.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-' + name + '"/></svg>';
+  return s;
+}
+
+/* Breadcrumb target bar: "./" (root, clickable) › sub/ › … each segment jumps
+   to that folder; an "up" button moves to the parent. */
+function barTarget() {
+  const span = el('span', { class: 'fs-target', title: 'active folder' });
+  const segs = selected ? selected.split('/') : [];
+  const root = el('button', { class: 'fs-crumb', type: 'button', title: 'Go to the top level' });
+  root.appendChild(icon('root'));
+  root.appendChild(document.createTextNode('./'));
+  root.addEventListener('click', () => setSelected(''));
+  span.appendChild(root);
+  let acc = '';
+  segs.forEach((seg) => {
+    acc = acc ? acc + '/' + seg : seg;
+    span.appendChild(el('span', { class: 'fs-crumb-sep', text: '›' }));
+    const b = el('button', { class: 'fs-crumb', type: 'button', title: 'Go to ' + acc + '/' });
+    b.appendChild(icon('folder'));
+    b.appendChild(document.createTextNode(seg + '/'));
+    b.addEventListener('click', () => setSelected(acc));
+    span.appendChild(b);
+  });
+  return span;
+}
+
+function upBtn() {
+  const b = el('button', { class: 'fs-btn fs-up', type: 'button', title: 'Up to parent folder' });
+  b.appendChild(icon('updir'));
+  b.disabled = !selected;
+  b.addEventListener('click', () => {
+    if (!selected) return;
+    const i = selected.lastIndexOf('/');
+    setSelected(i < 0 ? '' : selected.slice(0, i));
+  });
+  return b;
+}
+
+function btn(label, fn) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'fs-bar-btn';
+  const ico = ACTION_ICONS[label];
+  if (ico) b.appendChild(icon(ico));
+  b.appendChild(document.createTextNode(label));
+  b.addEventListener('click', fn);
+  return b;
 }
 
 function render() {
@@ -278,7 +339,7 @@ function render() {
     const tree = buildTree(items);
     rootEl.replaceChildren();
     const bar = el('div', { class: 'fs-bar' },
-      [barTarget(), btn('new folder', () => newFolderIn(selected)),
+      [barTarget(), upBtn(), btn('new folder', () => newFolderIn(selected)),
        btn('new file', () => newFileIn(selected)),
        btn('upload', () => uploadTarget(selected)),
        btn('refresh', () => render())]);
@@ -295,20 +356,6 @@ function render() {
     rows.forEach((r) => body.appendChild(r));
     rootEl.appendChild(body);
   });
-}
-
-function barTarget() {
-  return el('span', { class: 'fs-target', title: 'active folder',
-    text: '⟶ ' + (selected ? selected + '/' : '/') });
-}
-
-function btn(label, fn) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'fs-bar-btn';
-  b.textContent = label;
-  b.addEventListener('click', fn);
-  return b;
 }
 
 /* ---- drag and drop: target fn resolves the folder at drop time ---- */

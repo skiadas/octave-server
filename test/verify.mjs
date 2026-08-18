@@ -272,6 +272,43 @@ async function main() {
       }
     }
 
+    // Multi-figure scripts must keep EVERY figure: two figures in one run ->
+    // two gallery entries under one run header, viewer showing "N / N".
+    {
+      let r;
+      try {
+        r = await withTimeout(page.evaluate(async () => {
+          const oo = window.__oo;
+          const beforeItems = document.querySelectorAll('#galleryList .gal-item').length;
+          const beforeRuns = document.querySelectorAll('#galleryList .gal-run').length;
+          oo.run('figure(1); plot(sin(0:0.1:10)); figure(2); plot(cos(0:0.1:10));');
+          await oo.awaitRender();
+          return {
+            error: oo.lastError,
+            svgCount: oo.plotSVGCount(),
+            beforeItems,
+            beforeRuns,
+            items: document.querySelectorAll('#galleryList .gal-item').length,
+            runs: document.querySelectorAll('#galleryList .gal-run').length,
+            counter: document.getElementById('plotCounter').textContent,
+          };
+        }), CASE_TIMEOUT_MS);
+      } catch (err) {
+        record('multi-figure keeps both figures', false, 'ABORT: ' + (err && err.message ? err.message : String(err)));
+        await restartChrome();
+        r = null;
+      }
+      if (r) {
+        const deltaItems = r.items - r.beforeItems;
+        const deltaRuns = r.runs - r.beforeRuns;
+        const ok = !r.error && deltaItems === 2 && deltaRuns <= 1 && r.svgCount >= 1
+          && r.counter === r.items + ' / ' + r.items;
+        record('multi-figure keeps both figures', ok,
+          ok ? `+${deltaItems} items +${deltaRuns} runs ${r.counter}`
+             : `error=${r.error || '(none)'} +${deltaItems} items +${deltaRuns} runs counter=${r.counter}`);
+      }
+    }
+
     console.log('\n=== Summary ===');
     let fail = 0;
     for (const r of results) {

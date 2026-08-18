@@ -4,8 +4,10 @@ Feasibility PoC for **Route G**: GNU Octave compiled to WebAssembly, with plotti
 rendered in-browser by gnuplot compiled to WebAssembly.
 
 **Status: M0–M3 done — scaffolding, vendor pinning, patch set, wasm builds,
-app shell (ES modules + esbuild), test harness, user file persistence + plot
-gallery + file panel (selected-folder model). Render battery 9/9 `verify:fast`.**
+app shell (ES modules + esbuild), test harness, user file persistence + per-
+figure plot gallery (run-grouped entries + one-SVG viewer) + file panel
+(icon toolbar, breadcrumb target bar, up-to-parent). Render battery 10/10
+`verify:fast`.**
 
 See `docs/roadmap.md` for milestones and `docs/verification.md` for gates.
 

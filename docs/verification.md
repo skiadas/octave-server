@@ -1,6 +1,6 @@
 # Verification
 
-Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles), file panel feature (selected-folder model, create file/folder inside a folder, per-folder upload) live; render battery `verify:fast` 9/9 green; UI unit 22/22, smoke 5/5, single-file 2/2 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green 10/10.**
+Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles); per-figure plot pipeline live: each figure renders to its own `/plot-fig-*.gp` stream (truncated on redraw), JS renders every changed figure into run-grouped gallery entries with a one-SVG viewer (◀ i / N ▶); file panel hardened with an icon toolbar + clickable breadcrumb target bar + up-to-parent; render battery `verify:fast` 10/10 green; UI unit 35/35, smoke 5/5, single-file 3/3 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green.**
 
 ## Gates
 
@@ -13,7 +13,7 @@ Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (d
 | 1e | Does `regdatasmooth` (Forge `data-smoothing`) load? | pass |
 | 2 | Is the `gnuplot` graphics toolkit registered? | pass |
 | 3 | Do Octave-generated gnuplot commands render through gnuplot-wasm? | pass |
-| 4 | Multi-figure / `hold on` correctness | pass (hold-on case) |
+| 4 | Multi-figure / `hold on` correctness — does a 2-figure script keep **both** figures (two gallery items, one run)? | pass (hold-on case + multi-figure battery case) |
 
 ## How to run
 
@@ -60,6 +60,8 @@ never pin the shell.
 | imshow | `imshow(rand(50,50))` |
 | hold on | `plot(1:10); hold on; plot(1:5, "r-")` |
 | whole-file source | `runFile` of a multi-line `.m` (for loop + `printf` + `plot`) via the file editor hook |
+| multi-figure | `figure(1); plot(sin…); figure(2); plot(cos…)` → 2 gallery items, 1 run header, viewer "N / N" |
+| run button click | real click on `#runBtn` (Event guard) |
 
 `boxplot`/`pca`/`kstest`/`anova1`/`kmeans`/`ttest`/`pdf` come from the Octave
 Forge `statistics` 1.6.0 `inst/` tree (baked into the wasm FS; see
@@ -86,6 +88,19 @@ Forge `statistics` 1.6.0 `inst/` tree (baked into the wasm FS; see
   (2026-08-17): **9/9 pass** — plot, histogram, scatter, contour, plot3, bar,
   hold-on, whole-file source, and the run-button click, on one headless Chrome
   (~5 min; a couple of cases restarted+retried cleanly under host load).
+- **Per-figure pipeline** (2026-08-18, after the `__gnuplot_open_stream__` →
+  `/plot-fig-<h>.gp` + fresh-drawnow patch and a relink): a 2-figure script
+  writes **two separate files** (no `/plot.gp`), the JS renders **both** into
+  the gallery as one run (2 items, counter `2 / 2`); re-running the identical
+  script **replaces** the files (identical byte sizes, no growth) and adds a
+  second run group (4 items / 2 runs). `verify:fast` now **10/10 pass**
+  (includes the new multi-figure case) — `plot`, `hist`, `scatter`, `contour`,
+  `plot3`, `bar`, `hold-on`, whole-file, run-button, multi-figure.
+- **UI unit** `node ui-unit.mjs`: **35/35 pass**, including the new Phase D
+  cases — breadcrumb `./ › sub/ › inner/` segments, `./` returns to root, the
+  up-to-parent button, single-figure → one entry in Run 1, re-run → history
+  kept under Run 2, two figures in one run → two entries / one group, and
+  viewer `◀/▶` navigation updating the `i / N` counter.
 - **Statistics:** `ttest` returns `h=0, p=1` on a symmetric sample;
   `pdf("norm",0,0,1)` returns `0.39894228…`.
 - **Symbolic values:** `syms x; diff(sin(x))` → `cos(x)`;

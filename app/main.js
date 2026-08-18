@@ -18,12 +18,14 @@ const editorEl = document.getElementById('editor');
 const filenameEl = document.getElementById('filename');
 const runBtnEl = document.getElementById('runBtn');
 
-let lastPlotLen = 0;        // length of last /plot.gp bytes we rendered
+let lastPlotLen = 0;        // length of the last figure bytes we rendered
 let lastError = null;       // last eval error message (empty on success)
 let ready = false;
 let fsReady = false;
 let gnuplotWasmPromise = null;
 let renderInFlight = Promise.resolve();
+let figState = {};          // figId -> {mtime, sig} of the last handled file
+let activeRun = null;       // run token for the invocation currently evaluating
 
 /* ---- embedded assets (single-file build) ----
    scripts/build.mjs can inline the wasm binaries as base64 `data:` URIs in
@@ -172,31 +174,69 @@ function initOctave() {
   });
 }
 
-/* After every eval, pick up /plot.gp and render it with gnuplot-wasm. On a
-   successful render, broadcast the SVG so the gallery can keep history. */
+/* After every eval, pick up the per-figure gnuplot streams (/plot-fig-*.gp —
+   see patches/octave-m/.../__gnuplot_open_stream__.m) and render each figure
+   that changed with gnuplot-wasm. A figure file is "theirs" alone: it is
+   truncated on every draw, so each figure renders as one clean SVG and
+   multi-figure scripts keep every figure instead of clobbering a shared file.
+   On a successful render, broadcast each SVG so the gallery can keep it in
+   this invocation's run. */
+function figSig(bytes) {
+  let h = 2166136261;
+  for (let i = 0; i < bytes.length; i++) h = ((h ^ bytes[i]) * 16777619) >>> 0;
+  return bytes.length + ':' + h;
+}
+
 function renderPlot() {
   if (!Module || typeof createGnuplot !== 'function') return;
-  let script;
+  if (!Module.FS || typeof Module.FS.readdir !== 'function') return;
+  let names;
   try {
-    // Raw bytes: Octave's stream can embed binary palette/image data.
-    script = Module.FS.readFile('/plot.gp');
+    names = Module.FS.readdir('/');
   } catch (e) {
-    return; // no plot written yet
+    return;
   }
-  if (!script || !script.length || script.length === lastPlotLen) return;
-  lastPlotLen = script.length;
-  setStatus('rendering plot…');
-  renderInFlight = renderWithGnuplot(script, { x: 800, y: 600 }).then((svg) => {
-    plotEl.innerHTML = svg;
-    setStatus('Octave ready — plot rendered');
-    gallery.add(svg, 'plot');
-  }).catch((err) => {
-    plotEl.innerHTML = '<p style="color:#c33">gnuplot render error: ' +
-      escapeHtml(err.message) + '</p>';
-    setStatus('render error');
-    throw err;
-  });
-  renderInFlight.catch(() => { /* surfaced above */ });
+  const jobs = [];
+  for (const n of names || []) {
+    const m = /^plot-fig-(\d+)\.gp$/.exec(n);
+    if (!m) continue;
+    const fig = m[1];
+    let bytes, st;
+    try {
+      bytes = Module.FS.readFile('/' + n);
+      st = Module.FS.stat('/' + n);
+    } catch (e) {
+      continue; // not readable / disappearing mid-scan
+    }
+    if (!bytes || !bytes.length) continue;
+    const s = figSig(bytes);
+    const prev = figState[fig];
+    const touched = !prev || Number(st.mtime) !== prev.mtime;
+    const changed = !prev || prev.sig !== s;
+    if (!touched && !changed) continue; // stale from an earlier run
+    figState[fig] = { mtime: Number(st.mtime), sig: s };
+    jobs.push({ fig, bytes });
+  }
+  if (!jobs.length) return;
+  const run = activeRun;
+  setStatus(jobs.length > 1 ? 'rendering ' + jobs.length + ' figures…'
+                            : 'rendering figure ' + jobs[0].fig + '…');
+  renderInFlight = renderInFlight
+    .catch(() => {})
+    .then(() => renderAll(jobs, run))
+    .then(() => { setStatus('Octave ready — plot rendered'); })
+    .catch((err) => {
+      setStatus('render error');
+      append('\nrender error: ' + escapeHtml(err && err.message ? err.message : String(err)) + '\n', 'err');
+    });
+}
+
+async function renderAll(jobs, run) {
+  for (const j of jobs) {
+    const svg = await renderWithGnuplot(j.bytes, { x: 800, y: 600 });
+    lastPlotLen = j.bytes.length;
+    gallery.add(svg, j.fig, { run });
+  }
 }
 
 function run(cmd) {
@@ -206,6 +246,7 @@ function run(cmd) {
   }
   append('>> ' + escapeHtml(cmd) + '\n');
   lastError = '';
+  activeRun = gallery.beginRun();
   const st = Module.eval_string(cmd);
   if (st !== 0) {
     lastError = Module.last_error_message();
@@ -249,6 +290,7 @@ function runFile(text) {
   });
   append('>> run ' + escapeHtml(name) + '\n');
   lastError = '';
+  activeRun = gallery.beginRun();
   const st = Module.eval_string(text.toString());
   if (st !== 0) {
     lastError = Module.last_error_message();

@@ -62,10 +62,14 @@ go and how they are flushed.
 
 ### Layer 1 — Octave patch (`.m` + C++ registration + build flags)
 
-- `__gnuplot_open_stream__.m`: write commands to a file in the Emscripten
-  virtual filesystem (`/plot.gp`) instead of `popen()`.
-- drawnow flush: the stream stays open (append mode); the JS layer reads
-  `/plot.gp` after every eval.
+- `__gnuplot_open_stream__.m`: write commands to **one file per figure**
+  (`/plot-fig-<handle>.gp`) in the Emscripten virtual filesystem instead of
+  `popen()`. `/plot.gp` remains only as a no-handle fallback.
+- `__gnuplot_drawnow__.m` (display branch): always open a **fresh** stream
+  instead of reusing the stored one, so each draw truncates that figure's file
+  — every figure renders as one clean, single-block stream and files never
+  accumulate across runs.
+- drawnow flush: the JS layer scans `/plot-fig-*.gp` after every eval.
 - Probe stubs: `__gnuplot_version__.m` → 5.4.10; `__gnuplot_has_terminal__.m`
   → true; `__gnuplot_get_var__.m` → `GPVAL_TERM = svg`; all without executing
   a binary.
@@ -157,11 +161,15 @@ sym.m method  →  oo_sym_call("str(sympify('...').diff(...))")
 
 ### Layer 2 — JS bridge
 
-- After each Octave `eval`, check for a pending plot marker.
-- Read `plot.gp` from Octave's FS (rwl's wrapper already exposes `FS_readFile`).
-- Pass the script string to `gnuplot-wasm` (its API takes a script string and
-  returns SVG).
-- Inject the returned SVG into the plot panel.
+- After each Octave `eval`, scan Octave's MEMFS for `/plot-fig-*.gp` files.
+- Read each figure's bytes (`module.FS.readFile`, via rwl's wrapper which
+  already exposes `FS_readFile`); skip files untouched since last render
+  (checked by mtime + content signature), so re-runs render every figure that
+  was redrawn and stale figures are ignored.
+- Pass each script string to `gnuplot-wasm` (its API takes a script string and
+  returns SVG) — one SVG per figure per run.
+- Inject the returned SVGs into the gallery (each figure becomes an entry in
+  the current run's group) and show the newest in the viewer.
 
 The two wasm modules never call each other; JS is the only glue.
 
@@ -197,11 +205,18 @@ immediately (`load`/`run`/`csvread`/`imread`).
   refresh, and click-to-preview (image via blob URL, text/`.m` as source).
   Mutations funnel through `octfs` so store and MEMFS stay in sync; it
   re-renders on the `fs:change` / `fs:hydrated` events.
-- **Gallery (`app/gallery.js`):** session-scoped plot history. Each rendered
-  SVG is added from `main.js`; thumbnails support click-to-view, individual
-  SVG/PNG download (PNG via canvas rasterization), per-item remove, and a
-  clear-all. It never writes into `#plotPane` (which holds only the single
-  current SVG).
+- **Gallery + viewer (`app/gallery.js`, `app/main.js`):** session-scoped
+  figure history grouped into **runs** (each `run`/`runFile` invocation that
+  plots opens one group, labelled `Run N · HH:MM:SS`). `#plotPane` is a
+  one-SVG **viewer** (the most recent figure, with `◀ i / N ▶` prev/next,
+  a title, keyboard `←`/`→`, and clickable thumbnails that navigate to the
+  matching entry). Thumbnails also support individual SVG/PNG download (PNG
+  via canvas rasterization), per-item remove, and a clear-all. It never writes
+  more than one SVG into `#plotPane` at a time (the harness's plotSVGCount
+  relies on that).
+- **Panel (`app/filepanel.js`):** see §Layer 2b — icons for row actions and a
+  clickable **breadcrumb target bar** (`./` › `sub/` › …) plus an up-to-parent
+  button for navigation.
 - **Shared (`app/util.js`) and runtime (`app/runtime.js`):** ES-module
   helpers — DOM building (`el`), pub/sub (`emit`/`on`), blob download, HTML
   escaping, and the wasm runtime handle (`Module`, `userPath`, `setReady`,
@@ -231,16 +246,21 @@ immediately (`load`/`run`/`csvread`/`imread`).
 User types  surf(peaks(30))  in console
   └─▶ Octave (wasm, Web Worker)
         ├─ builds figure/axes/surface objects
-        └─ drawnow →
-             __gnuplot_draw_figure__ / __gnuplot_draw_axes__
-               └─ gnuplot command text → plot.gp (virtual FS) + marker
+        └─ drawnow → __gnuplot_drawnow__ opens a fresh stream
+             _figure 1_ → /plot-fig-1.gp   (truncated + rewritten)
+             _figure 2_ → /plot-fig-2.gp   (its own file)
+               └─ gnuplot command text (one clean block per figure)
   └─▶ JS bridge (after eval returns)
-        ├─ sees marker, reads plot.gp
-        └─ gnuplot(plot.gp) [gnuplot-wasm] → SVG string
-  └─▶ Plot panel: SVG injected into DOM
+        ├─ scans / → plot-fig-*.gp, renders each changed figure
+        ├─ gnuplot(plot-fig-N.gp) [gnuplot-wasm] → SVG per figure
+        └─ gallery.add(SVG, fig N, run) → run-grouped thumbnails
+  └─▶ Viewer: newest figure in #plotPane, ◀ i / N ▶ to navigate
 ```
 
-Multiple figures → one SVG per figure per flush.
+Multiple figures → one SVG per figure per run (subplots/hold stay one figure).
+Files are truncated on every draw, so a re-run replaces a figure's file
+instead of appending to it — gallery history grows one entry per figure per
+run, never an endless collage.
 
 ## 6. Scaling & cost model
 

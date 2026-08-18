@@ -1,5 +1,6 @@
 /* Octave-side gate check (Gate 1 + Gate 2): drives the app in headless Chrome,
-   verifies octave readiness, gnuplot toolkit registration, and /plot.gp output.
+   verifies octave readiness, gnuplot toolkit registration, and per-figure
+   output (/plot-fig-*.gp).
    Does NOT depend on the gnuplot renderer being correct (that's Gate 3). */
 import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer-core';
@@ -72,7 +73,8 @@ async function main() {
   check('Gate 2: gnuplot registered', tk.setWorks, 'graphics_toolkit("gnuplot") succeeds');
   check('Gate 2: gnuplot default', tk.current[0] === 'gnuplot', JSON.stringify(tk.current));
 
-  // Basic eval + plot -> does /plot.gp get written (no octave-side error)?
+  // Basic eval + plot -> does a per-figure stream file get rendered (no
+  // octave-side error)? lastPlotLength() reports the last figure's bytes.
   const plot = await page.evaluate(async () => {
     const oo = window.__oo;
     oo.run('plot(sin(0:0.1:10))');
@@ -80,7 +82,7 @@ async function main() {
     return { error: oo.lastError, scriptBytes: oo.lastPlotLength(), svgCount: oo.plotSVGCount() };
   });
   check('Gate 1/3: plot() runs w/o error', !plot.error, plot.error || `script=${plot.scriptBytes}B`);
-  check('Gate 3: /plot.gp produced', plot.scriptBytes > 0, `${plot.scriptBytes}B`);
+  check('Gate 3: per-figure stream rendered', plot.scriptBytes > 0, `${plot.scriptBytes}B`);
   check('Gate 3: SVG injected', plot.svgCount >= 1, `svg=${plot.svgCount}`);
 
   // Gate 1b smoke: statistics-forge numeric functions actually run.
