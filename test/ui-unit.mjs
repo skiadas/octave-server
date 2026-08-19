@@ -45,7 +45,7 @@ function makeElement(id) {
   };
   Object.defineProperty(el, 'innerHTML', {
     get() { return _html; },
-    set(v) { _html = String(v); },
+    set(v) { _html = String(v); this.children = []; },
   });
   Object.defineProperty(el, 'textContent', {
     get() { return _textSet ? _text : innerTextFrom(_html); },
@@ -142,6 +142,35 @@ globalThis.createGnuplot = () => Promise.resolve(() => Promise.resolve(''));
 globalThis.fetch = () => Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) });
 globalThis.prompt = () => null;
 globalThis.confirm = () => true;
+
+// window event listener (gallery keyboard ←/→) — registered at import time,
+// so this stub must exist before main.js loads below.
+globalThis._handlers = {};
+globalThis.addEventListener = (type, fn) => {
+  (globalThis._handlers[type] = globalThis._handlers[type] || []).push(fn);
+};
+globalThis.dispatchKey = (key) => {
+  for (const fn of globalThis._handlers.keydown || []) {
+    fn({ key, target: { tagName: 'DIV' }, preventDefault() {} });
+  }
+};
+
+// Blob download + image preview both go through URL.createObjectURL.
+globalThis.URL = {
+  _urls: [],
+  createObjectURL(obj) { globalThis.URL._urls.push(obj); return 'blob:unit-' + globalThis.URL._urls.length; },
+  revokeObjectURL() {},
+};
+
+// Picker upload: handleFiles drives a FileReader, which must call onload.
+globalThis.FileReader = class {
+  onload = null;
+  readAsArrayBuffer(blob) {
+    setImmediate(() => {
+      if (this.onload) this.onload({ target: { result: blob._bytes || new Uint8Array() } });
+    });
+  }
+};
 
 // ---- load the real module graph (same as the esbuild bundle) ----
 await import('../app/main.js');
@@ -400,6 +429,126 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   check('next button returns to Fig 2 (2 / 2)',
     gallery.index() === 1 && elements.plotCounter.textContent === '2 / 2',
     `index=${gallery.index()} counter=${JSON.stringify(elements.plotCounter.textContent)}`);
+
+  state.fs.figFiles = [];
+}
+
+// ---- Phase E: cache-bust asset wiring + file-panel extras + viewer controls ----
+{
+  const { fsStore } = await import('../app/fsstore.js');
+  const { filepanel } = await import('../app/filepanel.js');
+  const { octfs } = await import('../app/octfs.js');
+  const { gallery } = await import('../app/gallery.js');
+  const pane = elements.filesPane;
+  const tick = (ms) => new Promise((r) => setTimeout(r, ms || 5));
+
+  // locateFile resolves the ?v=<hash> baked into window.__OO_V__ by build.mjs.
+  const lf = oo.module && oo.module.locateFile;
+  check('runtime exposes locateFile', typeof lf === 'function', typeof lf);
+  if (typeof lf === 'function') {
+    const saved = { ...window.__OO_V__ };
+    window.__OO_V__ = { 'octave-wasm/octave.data': 'abc123abc123', 'octave-wasm/octave.wasm': 'def456def456' };
+    const l1 = lf('octave.data');
+    const l2 = lf('octave.wasm');
+    check('locateFile appends ?v=<hash> for versioned assets',
+      l1 === '../dist/octave-wasm/octave.data?v=abc123abc123' && l2 === '../dist/octave-wasm/octave.wasm?v=def456def456',
+      JSON.stringify({ l1, l2 }));
+    window.__OO_V__ = {};
+    check('locateFile falls back to the plain URL without __OO_V__',
+      lf('octave.data') === '../dist/octave-wasm/octave.data', lf('octave.data'));
+    const savedAssets = window.__OO_ASSETS__;
+    window.__OO_ASSETS__ = { 'octave-wasm/octave.data': 'data:application/octet-stream;base64,QUJD' };
+    check('embedded data URI wins over ?v= (single-file build)',
+      lf('octave.data') === 'data:application/octet-stream;base64,QUJD', String(lf('octave.data')));
+    window.__OO_ASSETS__ = savedAssets;
+    window.__OO_V__ = saved;
+  }
+
+  // file-panel extras: open preview, download, rename, upload, refresh.
+  filepanel.setSelected('');
+  await tick();
+  await octfs.putFile('preview.m', 'disp(1);\n');
+  await tick();
+  const rowFor = (label) => pane.children[1].children.find((c) => c.children[1] && c.children[1].textContent === label);
+  const action = (label, kind) => rowFor(label).children[2].children.find((c) => c.getAttribute('aria-label') === kind);
+
+  action('preview.m', 'open').click();
+  await tick();
+  check('open action shows the preview pane with file text',
+    elements.previewPane.style.display === 'block' && (elements.previewText.textContent || '').indexOf('disp(1);') !== -1,
+    `display=${elements.previewPane.style.display} text=${JSON.stringify(elements.previewText.textContent)}`);
+  elements.previewClose.click();
+  check('preview close hides the pane', elements.previewPane.style.display === 'none',
+    `display=${elements.previewPane.style.display}`);
+
+  const urlsBefore = globalThis.URL._urls.length;
+  action('preview.m', 'dl').click();
+  await tick();
+  check('download action creates a blob URL', globalThis.URL._urls.length > urlsBefore,
+    `blob urls created=${globalThis.URL._urls.length}`);
+
+  globalThis.prompt = () => 'renamed.m';
+  action('preview.m', 'ren').click();
+  await tick();
+  let ePath = (await fsStore.list()).map((i) => i.path);
+  check('rename action moves the file in the store',
+    ePath.indexOf('renamed.m') !== -1 && ePath.indexOf('preview.m') === -1,
+    'stored: ' + ePath.join(', '));
+
+  // Picker upload (FileReader path) into the current folder.
+  elements.fileInput.files = [{ name: 'up.dat', _bytes: new TextEncoder().encode('hi') }];
+  elements.fileInput.handlers['change']();
+  await tick(15);
+  ePath = (await fsStore.list()).map((i) => i.path);
+  check('picker upload lands in the user tree', ePath.indexOf('up.dat') !== -1,
+    'stored: ' + ePath.join(', '));
+
+  const barBtns = () => pane.children[0].children.filter((c) => c.tagName === 'BUTTON');
+  const refresh = barBtns().find((c) => textOf(c).indexOf('refresh') !== -1);
+  check('bar has a refresh button', !!refresh, refresh ? textOf(refresh) : 'none');
+  if (refresh) { refresh.click(); await tick(); }
+  check('refresh re-renders the tree', barBtns().length > 0, `bar buttons=${barBtns().length}`);
+
+  // Viewer: keyboard ←/→, thumbnail click, remove (×), clear-all.
+  gallery.clear();
+  state.fs.mtimeSeed = 0;
+  state.fs.figFiles = ['plot-fig-1.gp'];
+  state.fs.writeFile('/plot-fig-1.gp', 'set term svg;\nplot x;\n');
+  oo.run('figure(1); plot(1:2);');
+  await oo.awaitRender();
+  state.fs.mtimeSeed = 0;
+  state.fs.figFiles = ['plot-fig-2.gp'];
+  state.fs.writeFile('/plot-fig-2.gp', 'set term svg;\nplot y;\n');
+  oo.run('figure(2); plot(2:3);');
+  await oo.awaitRender();
+  check('two runs produce two entries', gallery.count() === 2 && gallery.runsCount() === 2,
+    `count=${gallery.count()} runs=${gallery.runsCount()}`);
+
+  globalThis.dispatchKey('ArrowLeft');
+  check('keyboard ← moves to the previous figure',
+    gallery.index() === 0 && elements.plotCounter.textContent === '1 / 2',
+    `index=${gallery.index()} counter=${JSON.stringify(elements.plotCounter.textContent)}`);
+  globalThis.dispatchKey('ArrowRight');
+  check('keyboard → moves to the next figure',
+    gallery.index() === 1 && elements.plotCounter.textContent === '2 / 2',
+    `index=${gallery.index()} counter=${JSON.stringify(elements.plotCounter.textContent)}`);
+
+  const listItems = () => elements.galleryList.children.filter((c) => c.className.indexOf('gal-item') !== -1);
+  const thumbs = listItems();
+  thumbs[0].children[0].click();
+  check('thumbnail click views that figure',
+    gallery.index() === 0 && elements.plotCounter.textContent === '1 / 2',
+    `index=${gallery.index()} counter=${JSON.stringify(elements.plotCounter.textContent)}`);
+
+  const xBtn = thumbs[0].children[2].children.find((c) => c.textContent === '×');
+  xBtn.click();
+  check('remove (×) deletes one entry and re-labels runs',
+    gallery.count() === 1 && gallery.runsCount() === 1,
+    `count=${gallery.count()} runs=${gallery.runsCount()}`);
+  elements.galleryClearBtn.click();
+  check('clear-all empties the gallery + viewer',
+    gallery.count() === 0 && elements.plotPane.innerHTML === '',
+    `count=${gallery.count()} plot=${JSON.stringify(elements.plotPane.innerHTML)}`);
 
   state.fs.figFiles = [];
 }

@@ -50,10 +50,19 @@ async function bundleApp() {
   return outfile;
 }
 
-/* SHA-256 short hash of a file's bytes, used for ?v= cache-busting. */
+/* SHA-256 short hash of a file's bytes, used for ?v= cache-busting. Returns
+   null when the artifact is missing, so a JS-only (UI) build succeeds without
+   the wasm binaries present — those URLs then ship un-versioned, which is fine
+   for artifact-less dev/CI, and the deploy/verify paths copy the real artifacts
+   in first (full hashes). */
 async function fileHash(rel) {
-  const b = await readFile(path.join(DIST_DIR, rel));
-  return createHash('sha256').update(b).digest('hex').slice(0, 12);
+  try {
+    const b = await readFile(path.join(DIST_DIR, rel));
+    return createHash('sha256').update(b).digest('hex').slice(0, 12);
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return null;
+    throw e;
+  }
 }
 
 /* Emit dist/app/index.html: a copy of the page whose local <script> URLs and
@@ -63,32 +72,40 @@ async function fileHash(rel) {
    replayed old octave.data against a new loader -- becomes impossible. */
 async function buildDistIndex(appBundleRel) {
   const html = await readFile(path.join(APP_DIR, 'index.html'), 'utf8');
-  const gnuplotJs = await fileHash('gnuplot-wasm/gnuplot.js');
-  const octaveJs = await fileHash('octave-wasm/octave.js');
-  const appJs = await fileHash(appBundleRel);
-  const vart = {
+  const hashes = {
+    'gnuplot-wasm/gnuplot.js': await fileHash('gnuplot-wasm/gnuplot.js'),
+    'octave-wasm/octave.js': await fileHash('octave-wasm/octave.js'),
+    [appBundleRel]: await fileHash(appBundleRel),
     'gnuplot-wasm/gnuplot.wasm': await fileHash('gnuplot-wasm/gnuplot.wasm'),
     'octave-wasm/octave.wasm': await fileHash('octave-wasm/octave.wasm'),
     'octave-wasm/octave.data': await fileHash('octave-wasm/octave.data'),
   };
-  const script = Object.entries(vart).map(
+  // Only assets that exist on disk get ?v= / a __OO_V__ entry.
+  const vart = {
+    'gnuplot-wasm/gnuplot.wasm': hashes['gnuplot-wasm/gnuplot.wasm'],
+    'octave-wasm/octave.wasm': hashes['octave-wasm/octave.wasm'],
+    'octave-wasm/octave.data': hashes['octave-wasm/octave.data'],
+  };
+  const script = Object.entries(vart).filter(([, v]) => v != null).map(
     ([key, v]) => '    ' + JSON.stringify(key) + ': ' + JSON.stringify(v)
   ).join(',\n');
-  const withV = (f) => f + '?v=' + (f === '../dist/gnuplot-wasm/gnuplot.js' ? gnuplotJs
-    : f === '../dist/octave-wasm/octave.js' ? octaveJs : appJs);
+  const versioned = (rel) => {
+    const h = hashes[rel];
+    return h ? '../dist/' + rel + '?v=' + h : '../dist/' + rel;
+  };
   const out = html
     .replace(
       '<script src="../dist/gnuplot-wasm/gnuplot.js"></script>',
-      '<script src="' + withV('../dist/gnuplot-wasm/gnuplot.js') + '"></script>'
+      '<script src="' + versioned('gnuplot-wasm/gnuplot.js') + '"></script>'
     )
     .replace(
       '<script src="../dist/octave-wasm/octave.js"></script>',
-      '<script src="' + withV('../dist/octave-wasm/octave.js') + '"></script>'
+      '<script src="' + versioned('octave-wasm/octave.js') + '"></script>'
     )
     .replace(
       '<script src="../dist/app/app.js"></script>',
       '<script>window.__OO_V__ = {\n' + script + '\n};\n</script>\n' +
-      '<script src="' + withV('../dist/app/app.js') + '"></script>'
+      '<script src="' + versioned(appBundleRel) + '"></script>'
     );
   const outFile = path.join(DIST_DIR, 'app', 'index.html');
   await writeFile(outFile, out);

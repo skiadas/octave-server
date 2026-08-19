@@ -390,6 +390,7 @@ function init() {
   if (dropZone) attachDrop(dropZone, () => selected);
   on('fs:change', render);
   on('fs:hydrated', render);
+  render(); // show the persisted tree immediately, before Octave has booted
 }
 
 export const filepanel = {

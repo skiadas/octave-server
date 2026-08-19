@@ -13,8 +13,18 @@ const APP_URL = `http://127.0.0.1:${PORT}/app/`;
 
 let server;
 function startServer() {
+  // allow_reuse_address lets reruns rebind while the previous socket is in
+  // TIME_WAIT (plain `python -m http.server` fails with EADDRINUSE right
+  // after a SIGKILL'd run).
+  const PY = [
+    'import sys, socketserver, http.server',
+    'class ReusableServer(socketserver.ThreadingTCPServer):',
+    '    allow_reuse_address = True',
+    '    daemon_threads = True',
+    "ReusableServer(('', int(sys.argv[1])), http.server.SimpleHTTPRequestHandler).serve_forever()",
+  ].join('\n');
   return new Promise((resolve, reject) => {
-    server = spawn('python3', ['-m', 'http.server', String(PORT)], { cwd: ROOT });
+    server = spawn('python3', ['-c', PY, String(PORT)], { cwd: ROOT });
     server.once('error', reject);
     server.once('spawn', resolve);
   });

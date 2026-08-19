@@ -2,7 +2,9 @@ name: Deploy
 
 # Auto-deploy the PoC to GitHub Pages on every push to main.
 # No post-deploy live gate: the octave-wasm / gnuplot-wasm builds act as the
-# gate (a broken build fails here before anything is published).
+# gate (a broken build fails here before anything is published). The wasm
+# artifacts are Actions-cache-keyed on their recipe inputs, so UI-only pushes
+# deploy without rebuilding them.
 
 on:
   push:
@@ -27,8 +29,33 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # The octave/gnuplot wasm artifacts only change when their recipe inputs
+      # change (Dockerfiles + the baked patches). UI-only pushes hit this job
+      # too, but restore the last built artifacts from the GH Actions cache and
+      # skip the ~2-15 min Docker rebuild entirely.
+      - name: Compute wasm input key (content-addressed)
+        id: wasm-key
+        run: |
+          set -euo pipefail
+          KEY=$( {
+            git hash-object scripts/octave-wasm.Dockerfile scripts/gnuplot-wasm.Dockerfile
+            git ls-files patches | sort | while read -r f; do git hash-object "$f"; done
+          } | git hash-object --stdin )
+          echo "hash=$KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Restore wasm artifacts (skip Docker rebuild when inputs unchanged)
+        id: wasm-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            site/dist/gnuplot-wasm
+            site/dist/octave-wasm
+          key: oo-wasm-artifacts-${{ steps.wasm-key.outputs.hash }}
+          save-always: true
+
       # gnuplot-wasm (fast: emsdk pull + compile).
       - name: Build gnuplot-wasm
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -43,6 +70,7 @@ jobs:
       # digest from scripts/octave-wasm.Dockerfile). ~5-15 min on first run,
       # layer-cached afterwards.
       - name: Build octave-wasm
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -54,6 +82,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=octave
 
       - name: Extract gnuplot artifacts
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           mkdir -p site/dist/gnuplot-wasm
@@ -62,6 +91,7 @@ jobs:
           docker rm gp >/dev/null
 
       - name: Extract octave artifacts
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           mkdir -p site/dist/octave-wasm

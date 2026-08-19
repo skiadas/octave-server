@@ -121,6 +121,27 @@ replays stale builds (garbled m-file parse errors on boot). Use it for local
 dev; hard-refresh guidance still applies on the deployed site, where Pages
 serves assets with short `max-age` + ETag revalidation.
 
+### Fast UI-only dev loop
+
+App/UI changes (`app/**`, `scripts/build.mjs`, `scripts/serve.py`, test code)
+don't need the wasm artifacts at all — a fresh reload of `dist/app/index.html`
+boots the existing `dist/octave-wasm` + `dist/gnuplot-wasm` files. The fast
+gates (no Docker, no wasm boot) are:
+
+```bash
+npm run build:dist    # esbuild (~15 ms) + regenerates dist/app/index.html
+npm run test:ui       # ui-unit: module-graph glue tests, stubbed runtime (<1 s)
+npm run test:index    # index-check: ?v=/__OO_V__ consistency in the generated page
+npm run test:dom      # ui-dom: real headless Chrome, heavy fetches blocked (~5-10 s)
+```
+
+`scripts/build.mjs` hashes each artifact that exists on disk (tolerant of a
+missing `dist/octave-wasm` — the artifact-less UI CI job runs the same way).
+The heavy gates — `npm run test:smoke` (real octave boot), `npm run verify:fast`,
+`npm run check:single` — run in the `Verify` workflow when wasm-recipe inputs
+change; UI-only pushes are covered by the `UI` workflow instead. See
+`docs/verification.md` for the CI layout.
+
 Loads `app/index.html` which wires both wasm modules together. Try:
 `plot(sin(0:0.1:10))`, `hist(randn(1000,1), 30)`, `surf(peaks(30))`,
 `imshow(rand(50,50))`, and the Forge stats ones:

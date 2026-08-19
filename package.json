@@ -6,7 +6,14 @@
     "build": "node scripts/build.mjs",
     "build:dist": "node scripts/build.mjs --profile=dist",
     "build:single": "node scripts/build.mjs --profile=single",
-    "serve": "bash scripts/serve.sh"
+    "dev": "bash scripts/serve.sh",
+    "serve": "bash scripts/serve.sh",
+    "test:ui": "node test/ui-unit.mjs",
+    "test:index": "node test/index-check.mjs",
+    "test:dom": "node test/ui-dom.mjs",
+    "test:smoke": "node test/ui-smoke.mjs",
+    "verify:fast": "SKIP_SLOW=1 node test/verify.mjs",
+    "verify": "node test/verify.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

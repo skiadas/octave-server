@@ -66,19 +66,24 @@ npm run serve           # http://localhost:8080/app/
 `dist/single/index.html` is a self-contained build (bundle + both wasm
 binaries inlined as base64) that runs straight off `file://` with no server.
 
-Tests: see `docs/verification.md`. Fast tiers need no Chrome:
-`cd test && npm run test:ui` (<1 s) and `npm run test:smoke` (1–2 min, real
-Octave boot); the render battery is `npm run verify:fast`.
+Tests: see `docs/verification.md`. Fast tiers need no wasm boot and run from the
+repo root: `npm run test:ui` (<1 s, stubbed runtime), `npm run test:index`
+(generated page `?v=`/`__OO_V__` consistency), `npm run test:dom` (~5–10 s,
+real headless Chrome with the heavy fetches blocked). The heavier gates live in
+`cd test`: `npm run test:smoke` (1–2 min, real Octave boot) and the render
+battery `npm run verify:fast`.
 
-## Test tiers (`cd test`)
+## Test tiers
 
 | Tier | Command | Needs | Time |
 |---|---|---|---|
 | UI unit | `npm run test:ui` | none | <1 s |
-| Single-file gate | `npm run check:single` | build only | ~5 s |
-| Smoke | `npm run test:smoke` | Chrome + built app | 1–2 min |
-| Render battery (fast) | `npm run verify:fast` | Chrome + built app | a few min |
-| Render battery (full) | `npm run verify` | Chrome + built app | slow 3-D cases |
+| Index check | `npm run test:index` | `build:dist` | <1 s |
+| UI DOM shell | `npm run test:dom` | Chrome + built app | 5–10 s |
+| Single-file gate | `cd test && npm run check:single` | build only | ~5 s |
+| Smoke | `cd test && npm run test:smoke` | Chrome + built app | 1–2 min |
+| Render battery (fast) | `cd test && npm run verify:fast` | Chrome + built app | a few min |
+| Render battery (full) | `cd test && npm run verify` | Chrome + built app | slow 3-D cases |
 
 ## License notes
 

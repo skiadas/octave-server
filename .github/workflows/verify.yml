@@ -1,31 +1,28 @@
 name: Verify
 
-# Non-deploying dependency + fast-UI gate. Runs ONLY when the inputs it guards
-# change (baked m-trees, the Dockerfiles that bake them, the gate/UI test code,
-# or the app shell), so docs/CI-only pushes skip it. Never publishes anything —
-# it exists to catch a broken dependency set or UI-wiring regression BEFORE a
-# commit-build ships them. Strict: any failed step fails the job.
+# Non-deploying dependency + integration gate (the "wasm gate"). Runs ONLY
+# when the recipe inputs it guards change: the baked m-trees, the Dockerfiles
+# that bake them, the build scripts, or the gate/UI-integration harness (ui-smoke
+# / package-deps / verify battery / single-file check). It exists to catch a
+# broken dependency set or real-boot wiring regression BEFORE a commit-build
+# ships them — it never publishes anything.
 #
-# It builds the same artifacts deploy.yml does (reusing the shared GH action
-# cache), boots them headless, and checks:
-#   - test/package-deps.mjs : every call site in the baked m-trees resolves at
-#     runtime (which) or is allowlisted — 0 GAPS required.
-#   - test/ui-unit.mjs     : app/main.js glue logic with a stubbed runtime.
-#   - test/ui-smoke.mjs    : real octave-wasm boot + UI wiring, no gnuplot render.
+# UI-only changes (app/**, scripts/build.mjs, serve*, ui-unit/index-check/
+# ui-dom test code) do NOT run here: they hit the fast `UI` workflow instead,
+# which needs no octave/gnuplot build at all. Strict: any failed step fails.
 
 on:
   push:
     branches: [main]
-    # Only the inputs that could affect baked-tree dependencies or UI wiring.
     paths:
       - 'patches/octave-m/**'
       - 'patches/octave-src/**'
       - 'scripts/*.Dockerfile'
       - 'scripts/build*.sh'
-      - 'app/**'
       - 'test/package-deps*.mjs'
-      - 'test/ui-unit.mjs'
       - 'test/ui-smoke.mjs'
+      - 'test/verify.mjs'
+      - 'test/single-file-check.mjs'
   workflow_dispatch:
 
 permissions:
@@ -99,6 +96,10 @@ jobs:
       - name: Install test deps
         working-directory: test
         run: npm ci
+
+      - name: Generated index cache-busting check (artifacts present — full mode)
+        working-directory: test
+        run: node index-check.mjs
 
       - name: Chrome executable
         run: |

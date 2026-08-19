@@ -1,0 +1,73 @@
+name: UI
+
+# Fast UI-only gate. NO Docker, no octave/gnuplot builds: it runs only when
+# the UI shell or its fast test harness changes, and finishes in seconds. The
+# heavy wasm gate (verify.yml) is reserved for changes that touch the baked
+# m-trees, the Dockerfiles, or the integration harness — so UI-only pushes
+# never pay the octave/gnuplot rebuild cost. Strict: any failed step fails.
+
+on:
+  push:
+    branches: [main]
+    # UI-only inputs. Everything wasm/Docker-side lives in verify.yml.
+    paths:
+      - 'app/**'
+      - 'test/ui-unit.mjs'
+      - 'test/ui-dom.mjs'
+      - 'test/index-check.mjs'
+      - 'scripts/build.mjs'
+      - 'scripts/serve.py'
+      - 'scripts/serve.sh'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui
+  cancel-in-progress: true
+
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install root deps + bundle app (no wasm artifacts needed)
+        run: |
+          npm ci
+          npm run build:dist
+      - name: Install test deps
+        working-directory: test
+        run: npm ci
+
+      - name: Generated index consistency (structural + present-file hashes)
+        working-directory: test
+        run: node index-check.mjs
+
+      - name: UI glue tests (no browser, no wasm)
+        working-directory: test
+        run: node ui-unit.mjs
+
+      - name: Chrome executable
+        run: |
+          if command -v google-chrome >/dev/null 2>&1; then
+            echo "CHROME_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          elif command -v google-chrome-stable >/dev/null 2>&1; then
+            echo "CHROME_PATH=$(command -v google-chrome-stable)" >> "$GITHUB_ENV"
+          else
+            echo "::error::No chrome found; expected google-chrome or google-chrome-stable on the runner"
+            exit 1
+          fi
+
+      - name: Shell/DOM check (wasm fetches blocked, no boot)
+        working-directory: test
+        run: node ui-dom.mjs

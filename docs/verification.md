@@ -1,6 +1,6 @@
 # Verification
 
-Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles); per-figure plot pipeline live: each figure renders to its own `/plot-fig-*.gp` stream (truncated on redraw), JS renders every changed figure into run-grouped gallery entries with a one-SVG viewer (◀ i / N ▶); file panel hardened with an icon toolbar + clickable breadcrumb target bar + up-to-parent; cache-busting live: `dist/app/index.html` generated with `?v=<hash>` asset URLs + `window.__OO_V__` consumed by `main.js` `locateFile`, and `scripts/serve.py` sends `Cache-Control: no-store` so stale wasm/data can never replay; render battery `verify:fast` 10/10 green; UI unit 35/35, smoke 5/5, single-file 3/3 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green.**
+Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles); per-figure plot pipeline live: each figure renders to its own `/plot-fig-*.gp` stream (truncated on redraw), JS renders every changed figure into run-grouped gallery entries with a one-SVG viewer (◀ i / N ▶); file panel hardened with an icon toolbar + clickable breadcrumb target bar + up-to-parent and now renders the persisted tree immediately (no blank panel until Octave boots); cache-busting live: `dist/app/index.html` generated with `?v=<hash>` asset URLs + `window.__OO_V__` consumed by `main.js` `locateFile`, and `scripts/serve.py` sends `Cache-Control: no-store` so stale wasm/data can never replay; UI-only iterations are now a fast no-boot loop — `ui-unit` 50/50, `index-check` 9/9, `ui-dom` 8/8 — wired into a dedicated UI CI gate (no Docker) while the wasm gate (`verify.yml`) and the Deploy wasm-artifact cache make app-only pushes skip the ~2–15 min Docker rebuild; render battery `verify:fast` 10/10 green; smoke 5/5, single-file 3/3 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green.**
 
 ## Gates
 
@@ -22,6 +22,8 @@ scripts/build.sh          # build both wasm artifacts (only needed when they cha
 cd test && npm install     # once
 npm run build             # bundle app/ (must run before any browser-tier test)
 npm run test:ui           # FAST tier: UI glue logic with stubbed runtime (<1 s, no Chrome)
+npm run test:index        # FAST tier: generated dist/app/index.html ?v=/__OO_V__ consistency
+npm run test:dom          # FAST tier: real headless Chrome shell, wasm fetches blocked (~5-10 s)
 npm run test:smoke        # FAST tier: real octave-wasm boot, non-plot cases only (~1-2 min)
 npm run check:single      # gate: dist/single/index.html evaluates over file://
 node octave-check.mjs     # Gates 1/1b/2 + plot smoke (one render)
@@ -30,11 +32,25 @@ npm run verify            # full render battery incl. CPU-bound mesh/surf/boxplo
 node symbolic-check.mjs   # Gate 1c/1d/1e + symbolic smoke (Puppeteer, needs network once for Pyodide/SymPy CDN)
 ```
 
-For day-to-day UI work the wasm artifacts don't change, so the full battery is
-overkill: `npm run verify:fast` (battery minus the CPU-bound `mesh`/`surf`/
+For day-to-day **UI-only** work (app/**, build scripts, serve, the fast test
+code) the wasm artifacts don't change, so pay the fastest tier only:
+`npm run test:ui` + `npm run test:index` + `npm run test:dom` (<30 s total, no
+wasm boot). `npm run verify:fast` (battery minus the CPU-bound `mesh`/`surf`/
 `boxplot`/`imshow` render cases, with a tighter per-case cap of 2.5 min) covers
-everything else in a few minutes. Run the full `verify.mjs` only when
-`octave.wasm`/`gnuplot.wasm` change.
+the render path in a few minutes when the app really boots. Run the full
+`verify.mjs` only when `octave.wasm`/`gnuplot.wasm` change.
+
+### CI layout
+
+| Workflow | Runs when | Cost |
+|---|---|---|
+| **UI** (`.github/workflows/ui.yml`) | `app/**`, `test/ui-unit.mjs`, `test/ui-dom.mjs`, `test/index-check.mjs`, `scripts/build.mjs`, `scripts/serve.py`, `scripts/serve.sh`, `package.json` | no Docker, no wasm — `build:dist` (tolerant of missing artifacts) + the three fast tests |
+| **Verify** (`.github/workflows/verify.yml`) | `patches/**`, `scripts/*.Dockerfile`, `scripts/build*.sh`, `test/package-deps*.mjs`, `test/ui-smoke.mjs`, `test/verify.mjs`, `test/single-file-check.mjs` | builds the wasm artifacts (shared GHA cache), boots them headless: package-deps (0 GAPS), index-check (full mode), ui-smoke, verify battery, single-file |
+| **Deploy** (`.github/workflows/deploy.yml`) | every push to `main` | wasm artifacts **Actions-cache-keyed on their recipe inputs** (Dockerfiles + `patches/` hashes); on a cache hit it restores `dist/gnuplot-wasm` + `dist/octave-wasm` and **skips the Docker rebuild + extract** (~2–15 min saved on app-only pushes), then bundles + deploys |
+
+The app wasm never rebuilds twice: Deploy's cache (key `oo-wasm-artifacts-<content hash>`)
+is restored by Verify when the recipe inputs match, so a UI-only push runs **UI
+only**, and a dependency push runs Verify + Deploy once each.
 
 The harness (`test/verify.mjs`) runs this battery in `app/index.html`. It is
 hardened against the CPU-bound gnuplot-wasm renderer: each case has a hard
@@ -96,11 +112,23 @@ Forge `statistics` 1.6.0 `inst/` tree (baked into the wasm FS; see
   second run group (4 items / 2 runs). `verify:fast` now **10/10 pass**
   (includes the new multi-figure case) — `plot`, `hist`, `scatter`, `contour`,
   `plot3`, `bar`, `hold-on`, whole-file, run-button, multi-figure.
-- **UI unit** `node ui-unit.mjs`: **35/35 pass**, including the new Phase D
-  cases — breadcrumb `./ › sub/ › inner/` segments, `./` returns to root, the
-  up-to-parent button, single-figure → one entry in Run 1, re-run → history
-  kept under Run 2, two figures in one run → two entries / one group, and
-  viewer `◀/▶` navigation updating the `i / N` counter.
+- **UI unit** `node ui-unit.mjs`: **50/50 pass** — Phase D breadcrumb/navigation
+  cases (`./ › sub/ › inner/`, up-to-parent, run-grouped history, `◀/▶`) plus
+  Phase E action coverage (preview open/close, download blob URL, rename,
+  picker upload, refresh, keyboard ←/→, thumbnail click, per-entry remove,
+  clear-all) and the `locateFile` `?v=`/data-URI priority rules.
+- **Index check** `node index-check.mjs`: **9/9 pass** — every generated
+  `dist/app/index.html` local script tag carries a matching `?v=<sha256/12>`,
+  `__OO_V__` covers + hashes all three wasm fetches, Pyodide stays a pinned CDN
+  URL (degrades to warnings when wasm artifacts aren't on disk, so the
+  artifact-less UI CI job still passes).
+- **UI DOM shell** `node ui-dom.mjs`: **8/8 pass** — real headless Chrome loads
+  `app/index.html` with the heavy fetches (octave.data/wasm, gnuplot.wasm,
+  Pyodide CDN) blocked, so Octave never boots: both loader globals defined, all
+  shell panels present, editor is a `<textarea>`, the file-panel bar renders its
+  buttons, viewer controls present, status is non-fatal. The harness servers set
+  `SO_REUSEADDR` so rapid local reruns never hit `EADDRINUSE` from a previous
+  run's `TIME_WAIT` socket.
 - **Statistics:** `ttest` returns `h=0, p=1` on a symmetric sample;
   `pdf("norm",0,0,1)` returns `0.39894228…`.
 - **Symbolic values:** `syms x; diff(sin(x))` → `cos(x)`;
