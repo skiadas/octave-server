@@ -60,6 +60,7 @@ const ELEM_IDS = [
   'plotPrevBtn', 'plotNextBtn', 'plotCounter', 'plotTitle',
   'previewPane', 'previewTitle', 'previewImg', 'previewText', 'previewClose',
   'fileInput', 'filesToggle', 'workspace',
+  'editorPane', 'editorGutter', 'editorMirror', 'ooComplete', 'ooCaretProbe',
 ];
 const elements = {};
 for (const id of ELEM_IDS) elements[id] = makeElement(id);
@@ -592,6 +593,80 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   }
 
   state.fs.figFiles = [];
+}
+
+// ---- Phase G: editor overlay (highlight mirror, gutter, Ctrl+Space
+// ---- completion, draft persistence) ----
+{
+  const ed = elements.editor;
+  const mirror = elements.editorMirror;
+  const gutter = elements.editorGutter;
+  const popup = elements.ooComplete;
+  const { editorpad } = await import('../app/editorpad.js');
+
+  const key = (k, opts) => ed.handlers['keydown']({
+    key: k, preventDefault() {},
+    ctrlKey: !!(opts && opts.ctrlKey), metaKey: !!(opts && opts.metaKey),
+  });
+  const input = () => ed.handlers['input']({ target: ed });
+
+  ed.value = '% comment\nx = 1;\nplot(x);';
+  input();
+  check('highlight mirror renders token classes (comment/number)',
+    mirror.innerHTML.indexOf('hljs-comment') !== -1 && mirror.innerHTML.indexOf('hljs-number') !== -1,
+    mirror.innerHTML.slice(0, 120));
+  check('line gutter tracks the text line count',
+    gutter.textContent === '1\n2\n3', 'gutter=' + JSON.stringify(gutter.textContent));
+
+  ed.value = 'pl';
+  ed.selectionStart = ed.selectionEnd = 2;
+  key(' ', { ctrlKey: true });
+  check('Ctrl+Space opens the completion popup',
+    editorpad.popupVisible() === true && editorpad.completionCount() > 0,
+    `open=${editorpad.popupVisible()} count=${editorpad.completionCount()}`);
+  check('completion popup top match is an octave function',
+    editorpad.activeCompletion() === 'plot', `active=${editorpad.activeCompletion()}`);
+  key('Enter');
+  check('Enter accepts the completion into the editor',
+    ed.value === 'plot' && editorpad.popupVisible() === false,
+    `value=${JSON.stringify(ed.value)} open=${editorpad.popupVisible()}`);
+
+  ed.value = 'pl';
+  ed.selectionStart = ed.selectionEnd = 2;
+  key(' ', { ctrlKey: true });
+  key('ArrowDown');
+  check('ArrowDown moves to the next candidate',
+    editorpad.activeCompletion() === 'plot3', `active=${editorpad.activeCompletion()}`);
+  key('Escape');
+  check('Escape closes the popup without editing',
+    editorpad.popupVisible() === false && ed.value === 'pl',
+    `open=${editorpad.popupVisible()} value=${JSON.stringify(ed.value)}`);
+
+  ed.value = 'x = 1;';
+  ed.selectionStart = ed.selectionEnd = 0;
+  key('Tab');
+  check('Tab indents when no identifier precedes the caret',
+    ed.value === '  x = 1;', JSON.stringify(ed.value));
+
+  ed.value = 'x = 1;\ndisp';
+  ed.selectionStart = ed.selectionEnd = ed.value.length;
+  key('Tab');
+  check('Tab opens completion when an identifier precedes the caret',
+    editorpad.popupVisible() === true && editorpad.completionCount() > 0,
+    `open=${editorpad.popupVisible()} count=${editorpad.completionCount()}`);
+  key('Escape');
+
+  ed.value = 'a = 3;';
+  input();
+  check('editing persists the unsaved buffer draft (localStorage)',
+    (globalThis._storage['oo-editor-draft'] || '').indexOf('"a = 3;"') !== -1,
+    JSON.stringify(globalThis._storage['oo-editor-draft'] || null));
+  const was = globalThis._storage['oo-editor-draft'];
+  ed.value = 'b = 4;';
+  editorpad.restoreDraft();
+  check('restoreDraft repopulates the editor from the stored draft',
+    ed.value === 'a = 3;' && editorpad.popupVisible() === false,
+    `value=${JSON.stringify(ed.value)} stored=${JSON.stringify(was)}`);
 }
 
 console.log(failures ? '\nUI unit tests: FAILED' : '\nUI unit tests: all passed');

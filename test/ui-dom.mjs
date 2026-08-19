@@ -108,7 +108,8 @@ async function main() {
       const has = (id) => document.getElementById(id) !== null;
       const ids = ['output', 'status', 'editor', 'filename', 'runBtn', 'filesPane',
         'galleryPane', 'galleryList', 'galleryEmpty', 'plotBar', 'plotPrevBtn',
-        'plotNextBtn', 'plotCounter', 'plotTitle', 'fileInput', 'previewPane'];
+        'plotNextBtn', 'plotCounter', 'plotTitle', 'fileInput', 'previewPane',
+        'editorGutter', 'editorMirror', 'ooComplete', 'ooCaretProbe'];
       const missing = ids.filter((id) => !has(id));
       const editor = document.getElementById('editor');
       const paneBarBtns = document.getElementById('filesPane').querySelectorAll('.fs-bar button').length;
@@ -123,6 +124,8 @@ async function main() {
         hasPlotControls:
           has('plotPrevBtn') && has('plotNextBtn') && has('plotCounter') && has('plotTitle'),
         collapsed: document.documentElement.classList.contains('fs-collapsed'),
+        hasEditorOverlay:
+          has('editorGutter') && has('editorMirror') && has('ooComplete') && has('ooCaretProbe'),
       };
     });
 
@@ -140,9 +143,42 @@ async function main() {
     check('dist profile runs without embedded assets', shell.noEmbed, String(shell.noEmbed));
     check('all app-shell panels present', shell.missing.length === 0, shell.missing.join(', ') || 'all present');
     check('editor is a textarea', shell.editorIsTextarea, String(shell.editorIsTextarea));
+    check('editor overlay elements present (gutter/mirror/popup/probe)',
+      shell.hasEditorOverlay, 'gutter/mirror/popup/probe');
     check('file-panel bar renders its buttons', shell.paneBarBtns >= 4, 'buttons=' + shell.paneBarBtns);
     check('viewer controls present', shell.hasPlotControls, 'prev/next/counter/title');
     check('file panel collapsed by default', shell.collapsed, 'fs-collapsed on <html>');
+
+    // Editor overlay actually highlights + counts lines in a real browser.
+    const edState = await page.evaluate(() => {
+      const ed = document.getElementById('editor');
+      ed.value = '% hi\nx = 1;';
+      ed.dispatchEvent(new Event('input', { bubbles: true }));
+      return {
+        mirrorHasTokens: document.getElementById('editorMirror').innerHTML.includes('hljs-comment'),
+        gutter: document.getElementById('editorGutter').textContent,
+      };
+    });
+    check('editor mirror highlights typed text (token classes)',
+      edState.mirrorHasTokens, 'mirror has hljs-comment');
+    check('editor gutter counts lines',
+      edState.gutter === '1\n2', 'gutter=' + JSON.stringify(edState.gutter));
+
+    // Ctrl+Space completion popup opens with candidates in a real browser.
+    await page.evaluate(() => {
+      const ed = document.getElementById('editor');
+      ed.value = 'pl';
+      ed.selectionStart = ed.selectionEnd = 2;
+      ed.dispatchEvent(new KeyboardEvent('keydown', {
+        key: ' ', ctrlKey: true, bubbles: true, cancelable: true }));
+    });
+    const popupRows = await page.evaluate(() => {
+      const p = document.getElementById('ooComplete');
+      if (!p || p.hidden === true) return 0;
+      return p.querySelectorAll('.oo-comp-row').length;
+    });
+    check('Ctrl+Space shows the completion popup with candidates', popupRows > 0,
+      'rows=' + popupRows);
 
     // Toggle via the header button: the panel becomes visible (real layout).
     await page.click('#filesToggle');

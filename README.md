@@ -3,13 +3,16 @@
 Feasibility PoC for **Route G**: GNU Octave compiled to WebAssembly, with plotting
 rendered in-browser by gnuplot compiled to WebAssembly.
 
-**Status: M0–M3 done — scaffolding, vendor pinning, patch set, wasm builds,
+**Status: M0–M4 done — scaffolding, vendor pinning, patch set, wasm builds,
 app shell (ES modules + esbuild), test harness, user file persistence + per-
 figure plot gallery (run-grouped entries + one-SVG viewer) + file panel
-(icon toolbar, breadcrumb target bar, up-to-parent). Render battery 10/10
-`verify:fast`.**
+(icon toolbar, breadcrumb target bar, up-to-parent, collapsible layout) +
+highlighted editor (mirror + gutter + Ctrl+Space completion + draft
+persistence). Render battery 10/10 `verify:fast`. Feasibility verdict +
+production-boundary enumeration written — see `docs/verdict.md`.**
 
-See `docs/roadmap.md` for milestones and `docs/verification.md` for gates.
+See `docs/roadmap.md` for milestones, `docs/verdict.md` for the feasibility
+verdict, and `docs/verification.md` for gates.
 
 ## Goal
 
@@ -44,6 +47,7 @@ verification gates.
 │   ├── architecture.md   # component/data-flow/integration design
 │   ├── build.md          # how to build the wasm artifacts + app bundle
 │   ├── roadmap.md        # milestones + verification gates
+│   ├── verdict.md        # feasibility verdict + production-boundary enumeration
 │   └── verification.md   # gate results + how to run the test tiers
 ├── app/                  # web app — ES modules (main.js entry), bundled by esbuild
 ├── scripts/              # build.mjs (esbuild), Dockerfiles, wasm build scripts

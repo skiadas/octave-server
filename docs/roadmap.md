@@ -10,9 +10,11 @@ PoC milestones for Route G. Each gate has a crisp pass/fail criterion.
 | M1 | octave-wasm builds & runs | `octave.wasm` loads in browser; interpreter evaluates `1+1` and `rand(3,3)` |
 | M2 | gnuplot-wasm builds & renders | `gnuplot('plot x**2;', …)` returns a non-empty SVG in browser |
 | M3 | Integration pipeline | `plot`/`surf`/`hist`/`imshow` produce correct-looking SVG in the app's plot panel |
-| M4 | Verification + verdict | Gates 1–4 documented; feasibility verdict written |
+| M4 | Verification + verdict | Gates 1–4 documented; feasibility verdict written — **done**, `docs/verdict.md` |
 | M4.1 | App modernization | `app/` refactored to ES modules; esbuild bundle (`dist/app`) + self-contained single-file build (`dist/single`); CI builds before the test gate; tests import the real module graph |
 | M4.2 | File-panel feature | selected-folder model (`⟶ folder/` target), create file (opens in editor) / folder / upload inside the target, per-folder hover actions + drag-drop at arbitrary nesting; covered by UI-unit cases |
+| M4.3 | Editor UX | `#editor` stays the real `<textarea>` behind a syntax-highlight mirror + line gutter (highlight.js + highlightjs-octave, vendored), Ctrl+Space completion from a curated Octave list, and a localStorage draft of the unsaved buffer; covered by UI-unit (Phase G) + UI-DOM checks |
+| M5 | Production boundary | enumerated in `docs/verdict.md` (auth + cross-device persistence, deploy hardening, PDF export, interactivity spike, upstream drift, known language gaps) |
 
 ## Verification gates (theory → evidence)
 

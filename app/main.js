@@ -9,6 +9,7 @@ import { escapeHtml } from './util.js';
 import { octfs } from './octfs.js';
 import { gallery } from './gallery.js';
 import { filepanel } from './filepanel.js';
+import { editorpad } from './editorpad.js';
 import './layout.js';
 
 const outEl = document.getElementById('output');
@@ -313,18 +314,10 @@ function runFile(text) {
 runBtnEl.addEventListener('click', () => {
   runFile();
 });
-editorEl.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
-    ev.preventDefault();
-    runFile();
-  } else if (ev.key === 'Tab') {
-    ev.preventDefault();
-    const s = editorEl.selectionStart;
-    const e = editorEl.selectionEnd;
-    editorEl.value = editorEl.value.slice(0, s) + '  ' + editorEl.value.slice(e);
-    editorEl.selectionStart = editorEl.selectionEnd = s + 2;
-  }
-});
+// The editor's own keys (Ctrl+Enter to run, Tab to indent/complete, Ctrl+Space
+// completion) live in editorpad.js; runFile is injected here to keep the file
+// as the wiring layer. Editor.value stays the single buffer source of truth.
+editorpad.setRun(runFile);
 
 append('Loading Octave (wasm)…\n');
 
@@ -398,6 +391,7 @@ window.__oo = {
   get status() { return statusEl.textContent; },
   run,
   runFile,
+  editorpad,
   plotSVGCount: () => plotEl.querySelectorAll('svg').length,
   lastPlotLength: () => lastPlotLen,
   awaitRender: () => renderInFlight
