@@ -123,3 +123,7 @@ jobs:
       - name: UI smoke (real octave-wasm boot, non-plot)
         working-directory: test
         run: node ui-smoke.mjs
+
+      - name: Shell/DOM check (full mode — loaders present)
+        working-directory: test
+        run: node ui-dom.mjs
