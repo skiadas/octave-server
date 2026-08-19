@@ -359,10 +359,13 @@ function render() {
 }
 
 /* ---- drag and drop: target fn resolves the folder at drop time ---- */
+/* stopPropagation so a drop on a folder row only hits that row's handler,
+   never the workspace-level one too (which would double-upload). */
 function attachDrop(target, dirFn) {
   target.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; });
   target.addEventListener('drop', (ev) => {
     ev.preventDefault();
+    ev.stopPropagation();
     if (ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files.length) {
       handleFiles(ev.dataTransfer.files, dirFn());
     }
@@ -386,8 +389,27 @@ function init() {
   }
   const closeBtn = byId('previewClose');
   if (closeBtn) closeBtn.addEventListener('click', closePreview);
-  const dropZone = byId('filesPane');
-  if (dropZone) attachDrop(dropZone, () => selected);
+  // Whole-workspace upload target: #workspace is an ancestor of #filesPane and
+  // the rows, so drop-to-upload keeps working even when the file panel is
+  // collapsed. Row drops stop propagation in attachDrop, so no double upload.
+  const workspace = byId('workspace');
+  if (workspace) {
+    workspace.addEventListener('dragover', (ev) => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'copy';
+      if (workspace.classList) workspace.classList.add('fs-drop-hint');
+    });
+    workspace.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      if (workspace.classList) workspace.classList.remove('fs-drop-hint');
+      if (ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files.length) {
+        handleFiles(ev.dataTransfer.files, selected);
+      }
+    });
+    workspace.addEventListener('dragleave', () => {
+      if (workspace.classList) workspace.classList.remove('fs-drop-hint');
+    });
+  }
   on('fs:change', render);
   on('fs:hydrated', render);
   render(); // show the persisted tree immediately, before Octave has booted

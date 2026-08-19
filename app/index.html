@@ -4,14 +4,30 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Octave Web PoC (Route G)</title>
+  <script>
+    // Apply the saved sidebar state before first paint (default: collapsed) so
+    // the layout never flashes the file panel on load. Guarded for file:// /
+    // no-storage sandboxes; the app's layout module keeps it in sync on toggle.
+    try {
+      document.documentElement.classList.toggle('fs-collapsed', localStorage.getItem('oo-files-pane') !== '0');
+    } catch (e) { document.documentElement.classList.add('fs-collapsed'); }
+  </script>
   <style>
     body { font-family: -apple-system, system-ui, sans-serif; margin: 0; }
-    header { padding: 8px 12px; background: #222; color: #fff; font-size: 14px; }
+    header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #222; color: #fff; font-size: 14px; }
+    #filesToggle {
+      font-size: 12px; cursor: pointer; background: #333; color: #fff;
+      border: 1px solid #555; border-radius: 3px; padding: 3px 8px;
+    }
+    #filesToggle:hover { background: #444; }
     main { display: flex; flex-direction: row; gap: 8px; padding: 8px; height: calc(100vh - 60px); }
 
     /* ---- files panel ---- */
     #filesPane { flex: 0 0 240px; display: flex; flex-direction: column; min-width: 0;
                  border: 1px solid #ccc; overflow: auto; }
+    html.fs-collapsed #filesPane { display: none; }
+    /* workspace-wide drop feedback (also active when the panel is collapsed) */
+    #workspace.fs-drop-hint { outline: 2px dashed #4a90d9; outline-offset: -4px; }
     .fs-bar { display: flex; align-items: center; gap: 4px; padding: 4px; border-bottom: 1px solid #ddd; flex-wrap: wrap; }
     .fs-bar-btn, .fs-btn { font-size: 11px; cursor: pointer; background: #eee; border: 1px solid #bbb; border-radius: 3px; padding: 2px 6px; }
     .fs-bar-btn:hover, .fs-btn:hover { background: #ddd; }
@@ -132,8 +148,11 @@
     <symbol id="ic-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
     <symbol id="ic-up" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></symbol>
   </svg>
-  <header>Octave Web PoC &mdash; Route G (octave-wasm + gnuplot-wasm)</header>
-  <main>
+  <header>
+    <button id="filesToggle" type="button" title="Toggle file panel (Ctrl+B)" aria-pressed="false">Files ▸</button>
+    <span>Octave Web PoC &mdash; Route G (octave-wasm + gnuplot-wasm)</span>
+  </header>
+  <main id="workspace">
     <div id="filesPane" title="Drop files here to upload"></div>
 
     <div id="editorPane">

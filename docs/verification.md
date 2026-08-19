@@ -1,6 +1,6 @@
 # Verification
 
-Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles); per-figure plot pipeline live: each figure renders to its own `/plot-fig-*.gp` stream (truncated on redraw), JS renders every changed figure into run-grouped gallery entries with a one-SVG viewer (◀ i / N ▶); file panel hardened with an icon toolbar + clickable breadcrumb target bar + up-to-parent and now renders the persisted tree immediately (no blank panel until Octave boots); cache-busting live: `dist/app/index.html` generated with `?v=<hash>` asset URLs + `window.__OO_V__` consumed by `main.js` `locateFile`, and `scripts/serve.py` sends `Cache-Control: no-store` so stale wasm/data can never replay; UI-only iterations are now a fast no-boot loop — `ui-unit` 50/50, `index-check` 9/9, `ui-dom` 8/8 — wired into a dedicated UI CI gate (no Docker) while the wasm gate (`verify.yml`) and the Deploy wasm-artifact cache make app-only pushes skip the ~2–15 min Docker rebuild; render battery `verify:fast` 10/10 green; smoke 5/5, single-file 3/3 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green.**
+Status: **M0–M3 done — app shell refactored to ES modules + esbuild build (dist + single-file profiles); per-figure plot pipeline live: each figure renders to its own `/plot-fig-*.gp` stream (truncated on redraw), JS renders every changed figure into run-grouped gallery entries with a one-SVG viewer (◀ i / N ▶); file panel hardened with an icon toolbar + clickable breadcrumb target bar + up-to-parent and now renders the persisted tree immediately (no blank panel until Octave boots); workspace layout is collapsible — the 240px file panel is **collapsed by default** (header `Files` toggle or Ctrl/Cmd+B, state persisted in `localStorage` via `app/layout.js` + a head inline no-flash script), and drag-to-upload works across the whole workspace (`#workspace`) even while the panel is hidden; cache-busting live: `dist/app/index.html` generated with `?v=<hash>` asset URLs + `window.__OO_V__` consumed by `main.js` `locateFile`, and `scripts/serve.py` sends `Cache-Control: no-store` so stale wasm/data can never replay; UI-only iterations are now a fast no-boot loop — `ui-unit` 54/54, `index-check` 9/9, `ui-dom` 11/11 — wired into a dedicated UI CI gate (no Docker) while the wasm gate (`verify.yml`) and the Deploy wasm-artifact cache make app-only pushes skip the ~2–15 min Docker rebuild; render battery `verify:fast` 10/10 green; smoke 5/5, single-file 3/3 green; Octave Forge `statistics` 1.6.0 + `data-smoothing` 1.3.0 baked in; symbolic (SymPy) shim green.**
 
 ## Gates
 
@@ -112,21 +112,25 @@ Forge `statistics` 1.6.0 `inst/` tree (baked into the wasm FS; see
   second run group (4 items / 2 runs). `verify:fast` now **10/10 pass**
   (includes the new multi-figure case) — `plot`, `hist`, `scatter`, `contour`,
   `plot3`, `bar`, `hold-on`, whole-file, run-button, multi-figure.
-- **UI unit** `node ui-unit.mjs`: **50/50 pass** — Phase D breadcrumb/navigation
-  cases (`./ › sub/ › inner/`, up-to-parent, run-grouped history, `◀/▶`) plus
+- **UI unit** `node ui-unit.mjs`: **54/54 pass** — Phase D breadcrumb/navigation
+  cases (`./ › sub/ › inner/`, up-to-parent, run-grouped history, `◀/▶`),
   Phase E action coverage (preview open/close, download blob URL, rename,
   picker upload, refresh, keyboard ←/→, thumbnail click, per-entry remove,
-  clear-all) and the `locateFile` `?v=`/data-URI priority rules.
+  clear-all) and the `locateFile` `?v=`/data-URI priority rules, plus Phase F
+  layout (default-collapsed file panel, header toggle flips + persists,
+  Ctrl+B recolapses, whole-workspace drop uploads while collapsed).
 - **Index check** `node index-check.mjs`: **9/9 pass** — every generated
   `dist/app/index.html` local script tag carries a matching `?v=<sha256/12>`,
   `__OO_V__` covers + hashes all three wasm fetches, Pyodide stays a pinned CDN
   URL (degrades to warnings when wasm artifacts aren't on disk, so the
   artifact-less UI CI job still passes).
-- **UI DOM shell** `node ui-dom.mjs`: **8/8 pass** — real headless Chrome loads
+- **UI DOM shell** `node ui-dom.mjs`: **11/11 pass** — real headless Chrome loads
   `app/index.html` with the heavy fetches (octave.data/wasm, gnuplot.wasm,
   Pyodide CDN) blocked, so Octave never boots: both loader globals defined, all
   shell panels present, editor is a `<textarea>`, the file-panel bar renders its
-  buttons, viewer controls present, status is non-fatal. The harness servers set
+  buttons, viewer controls present, status is non-fatal — and the workspace
+  layout is collapsed by default, the header `Files` toggle reveals the panel
+  (computed display flips), and Ctrl+B recolapses it. The harness servers set
   `SO_REUSEADDR` so rapid local reruns never hit `EADDRINUSE` from a previous
   run's `TIME_WAIT` socket.
 - **Statistics:** `ttest` returns `h=0, p=1` on a symmetric sample;

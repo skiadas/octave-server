@@ -9,6 +9,7 @@ import { escapeHtml } from './util.js';
 import { octfs } from './octfs.js';
 import { gallery } from './gallery.js';
 import { filepanel } from './filepanel.js';
+import './layout.js';
 
 const outEl = document.getElementById('output');
 const cmdEl = document.getElementById('cmd');

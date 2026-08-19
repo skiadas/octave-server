@@ -122,6 +122,7 @@ async function main() {
         status: document.getElementById('status').textContent,
         hasPlotControls:
           has('plotPrevBtn') && has('plotNextBtn') && has('plotCounter') && has('plotTitle'),
+        collapsed: document.documentElement.classList.contains('fs-collapsed'),
       };
     });
 
@@ -141,6 +142,21 @@ async function main() {
     check('editor is a textarea', shell.editorIsTextarea, String(shell.editorIsTextarea));
     check('file-panel bar renders its buttons', shell.paneBarBtns >= 4, 'buttons=' + shell.paneBarBtns);
     check('viewer controls present', shell.hasPlotControls, 'prev/next/counter/title');
+    check('file panel collapsed by default', shell.collapsed, 'fs-collapsed on <html>');
+
+    // Toggle via the header button: the panel becomes visible (real layout).
+    await page.click('#filesToggle');
+    await page.waitForFunction("!document.documentElement.classList.contains('fs-collapsed')", { timeout: 10000 });
+    const shown = await page.evaluate(() => getComputedStyle(document.getElementById('filesPane')).display !== 'none');
+    check('toggle button reveals the file panel', shown, 'filesPane computed display');
+
+    // Ctrl+B recolapses it.
+    await page.keyboard.down('Control');
+    await page.keyboard.press('KeyB');
+    await page.keyboard.up('Control');
+    const recollapsed = await page.evaluate(() =>
+      document.documentElement.classList.contains('fs-collapsed'));
+    check('Ctrl+B recolapses the panel', recollapsed, 'fs-collapsed restored');
     if (pageErrors.length) console.log('(captured pageerrors:', JSON.stringify(pageErrors), ')');
     void pageErrors;
   } finally {

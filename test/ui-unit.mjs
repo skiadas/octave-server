@@ -59,13 +59,14 @@ const ELEM_IDS = [
   'filesPane', 'galleryPane', 'galleryList', 'galleryEmpty', 'galleryClearBtn',
   'plotPrevBtn', 'plotNextBtn', 'plotCounter', 'plotTitle',
   'previewPane', 'previewTitle', 'previewImg', 'previewText', 'previewClose',
-  'fileInput',
+  'fileInput', 'filesToggle', 'workspace',
 ];
 const elements = {};
 for (const id of ELEM_IDS) elements[id] = makeElement(id);
 
 const document = {
   getElementById: (id) => elements[id] || null,
+  documentElement: makeElement('html'),
   createElement: (tag) => {
     const e = makeElement('');
     e.tagName = String(tag).toUpperCase();
@@ -143,16 +144,24 @@ globalThis.fetch = () => Promise.resolve({ arrayBuffer: () => Promise.resolve(ne
 globalThis.prompt = () => null;
 globalThis.confirm = () => true;
 
-// window event listener (gallery keyboard ←/→) — registered at import time,
-// so this stub must exist before main.js loads below.
+// window event listener (gallery keyboard ←/→, layout Ctrl+B) — registered at
+// import time, so this stub must exist before main.js loads below.
 globalThis._handlers = {};
 globalThis.addEventListener = (type, fn) => {
   (globalThis._handlers[type] = globalThis._handlers[type] || []).push(fn);
 };
-globalThis.dispatchKey = (key) => {
-  for (const fn of globalThis._handlers.keydown || []) {
-    fn({ key, target: { tagName: 'DIV' }, preventDefault() {} });
-  }
+globalThis.dispatchKey = (key, opts) => {
+  const ev = { key, target: { tagName: 'DIV' }, preventDefault() {} };
+  if (opts && (opts.ctrlKey || opts.metaKey)) ev.ctrlKey = true;
+  for (const fn of globalThis._handlers.keydown || []) fn(ev);
+};
+
+// layout.js persists the collapse state here (absent in Node, so the app's
+// head inline script that applies it to <html> never runs in the harness).
+globalThis._storage = {};
+globalThis.localStorage = {
+  getItem: (k) => (k in globalThis._storage ? globalThis._storage[k] : null),
+  setItem: (k, v) => { globalThis._storage[k] = String(v); },
 };
 
 // Blob download + image preview both go through URL.createObjectURL.
@@ -549,6 +558,38 @@ check('__oo.runFile exposed', typeof oo.runFile === 'function', typeof oo.runFil
   check('clear-all empties the gallery + viewer',
     gallery.count() === 0 && elements.plotPane.innerHTML === '',
     `count=${gallery.count()} plot=${JSON.stringify(elements.plotPane.innerHTML)}`);
+
+  // ---- Phase F: workspace layout (collapsible file panel) ----
+  {
+    const layoutMod = await import('../app/layout.js');
+    const layout = layoutMod.layout;
+    const html = document.documentElement;
+
+    check('file panel starts collapsed by default',
+      layout.isFilesPaneCollapsed() === true && html.className.indexOf('fs-collapsed') !== -1,
+      `collapsed=${layout.isFilesPaneCollapsed()} class=${JSON.stringify(html.className)} button=${JSON.stringify(elements.filesToggle.textContent)}`);
+
+    elements.filesToggle.click();
+    check('toggle reveals the panel + persists the choice',
+      layout.isFilesPaneCollapsed() === false && html.className.indexOf('fs-collapsed') === -1 &&
+      globalThis._storage['oo-files-pane'] === '0' && elements.filesToggle.textContent === 'Files ▾',
+      `collapsed=${layout.isFilesPaneCollapsed()} class=${JSON.stringify(html.className)} stored=${JSON.stringify(globalThis._storage['oo-files-pane'])} button=${JSON.stringify(elements.filesToggle.textContent)}`);
+
+    globalThis.dispatchKey('b', { ctrlKey: true });
+    check('Ctrl+B recolapses + persists',
+      layout.isFilesPaneCollapsed() === true && globalThis._storage['oo-files-pane'] === '1',
+      `collapsed=${layout.isFilesPaneCollapsed()} stored=${JSON.stringify(globalThis._storage['oo-files-pane'])}`);
+
+    // Drop-to-upload keeps working across the whole workspace while collapsed.
+    elements.workspace.handlers['drop']({
+      preventDefault() {},
+      dataTransfer: { files: [{ name: 'drop.dat', _bytes: new TextEncoder().encode('hi') }] },
+    });
+    await tick(15);
+    const fPaths = (await fsStore.list()).map((i) => i.path);
+    check('whole-workspace drop uploads even while collapsed', fPaths.indexOf('drop.dat') !== -1,
+      'stored: ' + fPaths.join(', '));
+  }
 
   state.fs.figFiles = [];
 }
