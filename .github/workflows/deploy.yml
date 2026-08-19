@@ -45,13 +45,25 @@ jobs:
 
       - name: Restore wasm artifacts (skip Docker rebuild when inputs unchanged)
         id: wasm-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             site/dist/gnuplot-wasm
             site/dist/octave-wasm
           key: oo-wasm-artifacts-${{ steps.wasm-key.outputs.hash }}
-          save-always: true
+
+      # Snapshot the freshly built artifacts on a miss (upload happens after
+      # the job's steps run, by which point the extract steps have populated
+      # site/dist). On a hit the restore above already gives us the files, so
+      # nothing is saved.
+      - name: Save wasm artifacts
+        uses: actions/cache/save@v4
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            site/dist/gnuplot-wasm
+            site/dist/octave-wasm
+          key: oo-wasm-artifacts-${{ steps.wasm-key.outputs.hash }}
 
       # gnuplot-wasm (fast: emsdk pull + compile).
       - name: Build gnuplot-wasm
